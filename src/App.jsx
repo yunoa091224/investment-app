@@ -150,12 +150,35 @@ async function fetchFinnhubBatchPrices(symbols) {
   return result;
 }
 
-function mergeRealPrice(stock, realPrice) {
+// ── Ranking technical indicators (Twelve Data バッチAPI: 2コールで全銘柄) ──
+async function fetchRankingIndicators(symbols) {
+  const KEY = import.meta.env.VITE_TWELVE_DATA_KEY;
+  if (!KEY || !symbols.length) return {};
+  const B    = "https://api.twelvedata.com";
+  const syms = symbols.join(",");
+  const [rsiR, bbandsR] = await Promise.allSettled([
+    fetch(`${B}/rsi?symbol=${syms}&interval=1day&apikey=${KEY}`).then(r => r.json()),
+    fetch(`${B}/bbands?symbol=${syms}&interval=1day&apikey=${KEY}`).then(r => r.json()),
+  ]);
+  const rsiRaw    = rsiR.status    === 'fulfilled' ? rsiR.value    : {};
+  const bbandsRaw = bbandsR.status === 'fulfilled' ? bbandsR.value : {};
+  const result = {};
+  for (const sym of symbols) {
+    // 単一銘柄: response.values[] / 複数銘柄: response[sym].values[]
+    const rsiEntry    = rsiRaw.values    ? rsiRaw.values?.[0]    : rsiRaw[sym]?.values?.[0];
+    const bbandsEntry = bbandsRaw.values ? bbandsRaw.values?.[0] : bbandsRaw[sym]?.values?.[0];
+    result[sym] = {
+      rsi:    rsiEntry?.rsi           != null ? parseFloat(rsiEntry.rsi) : null,
+      bbands: bbandsEntry?.upper_band != null ? bbandsEntry              : null,
+    };
+  }
+  console.log("[TwelveData] ranking indicators:", result);
+  return result;
+}
+
+function mergeRealPrice(stock, realPrice, techData) {
   if (!realPrice) {
-    // リアルタイム価格取得失敗 → AI推定値のまま表示
-    const aiPrice = stock.current_price
-      ? parseFloat(stock.current_price.replace(/[^0-9.]/g, ""))
-      : null;
+    const aiPrice   = stock.current_price ? parseFloat(stock.current_price.replace(/[^0-9.]/g, "")) : null;
     const targetNum = parseFloat((stock.target_price || "0").replace(/[^0-9.]/g, ""));
     const upsidePct = aiPrice && targetNum ? ((targetNum - aiPrice) / aiPrice * 100) : null;
     return {
@@ -164,31 +187,76 @@ function mergeRealPrice(stock, realPrice) {
       _realPrice: false,
     };
   }
-  const p = realPrice;
-  // リアルタイム価格から売買戦略を再計算
-  const entryLow  = Math.round(p * 0.95);
-  const entryHigh = Math.round(p * 0.97);
-  const stopPrice = Math.round(p * 0.90);
-  const tp1Price  = Math.round(p * 1.12);
-  const tp2Price  = Math.round(p * 1.22);
-  const stopPct   = ((stopPrice  - p) / p * 100).toFixed(1); // 負値
-  const tp1Pct    = ((tp1Price   - p) / p * 100).toFixed(1);
-  const tp2Pct    = ((tp2Price   - p) / p * 100).toFixed(1);
-  const risk      = p - stopPrice;
-  const reward    = tp2Price - p;
-  const rrStr     = `1:${(reward / risk).toFixed(1)}`;
+  const p      = realPrice;
+  const rsi    = techData?.rsi    ?? null;
+  const bbands = techData?.bbands ?? null;
+  let entryLow, entryHigh, stopPrice, tp1Price, tp2Price;
+
+  if (bbands?.upper_band && bbands?.middle_band && bbands?.lower_band) {
+    const upper  = parseFloat(bbands.upper_band);
+    const middle = parseFloat(bbands.middle_band);
+    const lower  = parseFloat(bbands.lower_band);
+
+    // 買いゾーン: RSIに応じてバンド下限付近を調整
+    if (rsi !== null && rsi <= 30) {
+      // 売られすぎ → バンド下限より更に引き下げて割安で拾う
+      entryLow  = Math.round(lower * 0.95);
+      entryHigh = Math.round(lower * 0.98);
+    } else if (rsi !== null && rsi >= 70) {
+      // 買われすぎ → 現在価格近くまで引き上げ
+      entryLow  = Math.round(p * 0.97);
+      entryHigh = Math.round(p * 0.99);
+    } else if (rsi !== null && rsi <= 50) {
+      // 中立〜弱め → バンド下限付近で少し低め
+      entryLow  = Math.round(lower * 0.97);
+      entryHigh = Math.round(lower * 1.00);
+    } else {
+      // 中立〜強め → バンド下限 ± 2%
+      entryLow  = Math.round(lower * 0.98);
+      entryHigh = Math.round(lower * 1.02);
+    }
+
+    // 損切り: RSI30以下はタイト損切り / 通常は max(lower×0.97, p×0.90)
+    stopPrice = (rsi !== null && rsi <= 30)
+      ? Math.round(p * 0.93)
+      : Math.max(Math.round(lower * 0.97), Math.round(p * 0.90));
+
+    // 利確①: 中央線（移動平均）、利確②: 上限
+    tp1Price = Math.max(Math.round(middle), Math.round(p * 1.05));
+    tp2Price = Math.max(Math.round(upper),  Math.round(p * 1.15));
+    if (tp2Price <= tp1Price) tp2Price = Math.round(tp1Price * 1.08);
+  } else {
+    // BBands未取得: 固定倍率フォールバック
+    entryLow  = Math.round(p * 0.95);
+    entryHigh = Math.round(p * 0.97);
+    stopPrice = Math.round(p * 0.90);
+    tp1Price  = Math.round(p * 1.12);
+    tp2Price  = Math.round(p * 1.22);
+  }
+
+  const fmt    = (n) => `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`;
+  const stopPct = ((stopPrice - p) / p * 100);
+  const tp1Pct  = ((tp1Price  - p) / p * 100);
+  const tp2Pct  = ((tp2Price  - p) / p * 100);
+  const risk    = p - stopPrice;
+  const reward  = tp2Price - p;
+  const rrStr   = risk > 0 && reward > 0 ? `1:${(reward / risk).toFixed(1)}` : "1:1.0";
+
   const targetNum = parseFloat((stock.target_price || "0").replace(/[^0-9.]/g, ""));
   const upsidePct = targetNum ? ((targetNum - p) / p * 100) : null;
+
   return {
     ...stock,
     current_price: `$${p.toFixed(2)}`,
     upside:        upsidePct !== null ? `${upsidePct >= 0 ? "+" : ""}${upsidePct.toFixed(1)}%` : stock.upside,
     entry_zone:    `$${entryLow}〜$${entryHigh}`,
-    stop_loss:     `$${stopPrice} ${stopPct}%`,
-    take_profit1:  `$${tp1Price} +${tp1Pct}%`,
-    take_profit2:  `$${tp2Price} +${tp2Pct}%`,
+    stop_loss:     `$${stopPrice} ${fmt(stopPct)}`,
+    take_profit1:  `$${tp1Price} ${fmt(tp1Pct)}`,
+    take_profit2:  `$${tp2Price} ${fmt(tp2Pct)}`,
     risk_reward:   rrStr,
-    _realPrice: true,
+    _realPrice:  true,
+    _techBased:  bbands != null,
+    _rsi:        rsi,
   };
 }
 
@@ -534,7 +602,17 @@ function StockCard({ stock, color, expanded, onToggle }) {
           </div>
           {stock.entry_zone&&(
             <div style={{ marginTop:8, background:"#06111a", border:"1px solid #0d2535", borderRadius:8, padding:"10px 12px" }}>
-              <div style={{ fontSize:9, color:"#ffd700", letterSpacing:2, marginBottom:8 }}>⚡ 売買戦略</div>
+              <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:8 }}>
+                <span style={{ fontSize:9, color:"#ffd700", letterSpacing:2 }}>⚡ 売買戦略</span>
+                <span style={{ fontSize:8, padding:"1px 5px", borderRadius:4,
+                  background: stock._techBased ? "#00e5a018" : "#ffffff08",
+                  color:      stock._techBased ? "#00e5a0"   : "#4a7090",
+                  border:     `1px solid ${stock._techBased ? "#00e5a035" : "#0d2030"}` }}>
+                  {stock._techBased
+                    ? `BB+RSI${stock._rsi != null ? `(${stock._rsi.toFixed(0)})` : ""}`
+                    : "固定計算"}
+                </span>
+              </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, marginBottom:6 }}>
                 <div style={{ background:"#00e5a010", border:"1px solid #00e5a025", borderRadius:6, padding:"6px 8px" }}>
                   <div style={{ fontSize:9, color:"#00e5a0", marginBottom:2 }}>▶ 買いゾーン</div>
@@ -581,7 +659,7 @@ function RankingTab() {
   const [expandedId, setExpandedId] = useState(null);
   const [phaseIdx, setPhaseIdx] = useState(0);
   const phaseRef = useRef(null);
-  const phases = ["🌐 市場データを収集中...","📊 ニュース分析中...","🤖 10銘柄を選定中...","📈 スコアリング中...","📡 リアルタイム株価を取得中...","✅ レポート生成中..."];
+  const phases = ["🌐 市場データを収集中...","📊 ニュース分析中...","🤖 10銘柄を選定中...","📈 スコアリング中...","📡 株価・RSI・BBands取得中...","✅ テクニカル売買戦略を計算中..."];
   const cur = PERIODS.find(p=>p.key===period);
   const periodMap = { short:"短期（1〜4週間）スイングトレード向け", mid:"中期（1〜6ヶ月）トレンドフォロー向け", long:"長期（1〜3年）成長投資向け" };
   async function fetchRanking(p) {
@@ -590,13 +668,18 @@ function RankingTab() {
     phaseRef.current = setInterval(()=>setPhaseIdx(i=>Math.min(i+1, phases.length-2)),1100);
     try {
       const r = await callAPI(RANKING_PROMPT, `2026年5月時点で${periodMap[p]}のおすすめ米国株トップ10を選定してください。JSONのみ返してください。`);
-      // Finnhub でリアルタイム株価を一括取得
       clearInterval(phaseRef.current);
       setPhaseIdx(phases.length - 2);
       const tickers = (r.stocks || []).map(s => s.ticker);
-      const realPrices = await fetchFinnhubBatchPrices(tickers);
+      // Finnhub(株価) と Twelve Data(RSI・BBands) を並列取得
+      const [pricesR, indicatorsR] = await Promise.allSettled([
+        fetchFinnhubBatchPrices(tickers),
+        fetchRankingIndicators(tickers),
+      ]);
       setPhaseIdx(phases.length - 1);
-      const merged = { ...r, stocks: (r.stocks || []).map(s => mergeRealPrice(s, realPrices[s.ticker])) };
+      const prices     = pricesR.status     === 'fulfilled' ? pricesR.value     : {};
+      const indicators = indicatorsR.status === 'fulfilled' ? indicatorsR.value : {};
+      const merged = { ...r, stocks: (r.stocks || []).map(s => mergeRealPrice(s, prices[s.ticker], indicators[s.ticker])) };
       setData(prev=>({...prev,[p]:merged}));
     }
     catch(e) { setData(prev=>({...prev,[p]:{error:true,msg:e.message}})); }
