@@ -179,6 +179,52 @@ function ErrBox({ msg, onRetry }) {
   );
 }
 
+// ── Info Modal ────────────────────────────────────────────────
+const EXPLANATIONS = {
+  rsi:{ title:"RSI（相対力指数）", body:"過去14日間の値動きを基に、買われすぎ・売られすぎを0〜100で示す指標。\n\n🟢 30以下: 売られすぎ（反発期待）\n🟡 30〜70: 中立ゾーン\n🔴 70以上: 買われすぎ（反落注意）\n\n数値が高いほど短期的な過熱感があり、低いほど押し目買いのチャンスを示します。" },
+  macd:{ title:"MACD（移動平均収束拡散）", body:"短期（12日）と長期（26日）の指数移動平均の差を示すトレンド系指標。\n\n• MACDがシグナル線を上抜け → 買いシグナル\n• MACDがシグナル線を下抜け → 売りシグナル\n• ヒストグラムがプラス → 上昇モメンタム継続\n• ヒストグラムがマイナス → 下降モメンタム継続" },
+  ma_cross:{ title:"移動平均クロス", body:"50日移動平均線と200日移動平均線の関係を示す指標。\n\n📈 ゴールデンクロス: 50日線が200日線を上抜け\n→ 強気トレンドへの転換シグナル\n\n📉 デッドクロス: 50日線が200日線を下抜け\n→ 弱気トレンドへの転換シグナル\n\n長期トレンドの方向性を確認するのに有効です。" },
+  bollinger:{ title:"ボリンジャーバンド", body:"移動平均線（中心）±2標準偏差で引いた3本のラインで、価格の変動範囲を示します。\n\n• 上限付近: 買われすぎ・反落リスク\n• 下限付近: 売られすぎ・反発期待\n• バンド収縮: 大きな値動きの前兆\n• バンド拡大: 強いトレンドが継続中\n\n統計的に価格の約95%がバンド内に収まります。" },
+  tech_score:{ title:"総合テクニカルスコア", body:"RSI・MACD・移動平均・ボリンジャーバンド・チャートパターンなど複数の指標を総合したスコアです。\n\n🟢 70〜100: テクニカル的に強気・買いサイン多数\n🟡 40〜69: 中立・様子見\n🔴 0〜39: テクニカル的に弱気・注意が必要" },
+  per:{ title:"PER（株価収益率）", body:"株価 ÷ 1株当たり純利益（EPS）で計算。\n投資家が1円の利益に対して何円払っているかを示します。\n\n• 低PER: 割安の可能性（ただし成長期待が低い場合も）\n• 高PER: 割高だが高成長期待を織り込んでいる\n\n業種平均と比較することが重要。\n目安: 一般的に15〜20倍が適正水準とされます。" },
+  pbr:{ title:"PBR（株価純資産倍率）", body:"株価 ÷ 1株当たり純資産（BPS）で計算。\n会社の解散価値に対して何倍で取引されているかを示します。\n\n• 1倍未満: 理論上の解散価値以下（超割安）\n• 1〜3倍: 概ね適正水準\n• 3倍超: 将来の成長に対するプレミアム\n\nROEが高い企業は高PBRが正当化されます。" },
+  roe:{ title:"ROE（自己資本利益率）", body:"純利益 ÷ 自己資本 × 100で計算。\n株主から預かったお金でどれだけ効率よく利益を上げているかを示します。\n\n🟢 20%以上: 優秀（高収益ビジネスモデル）\n🟡 10〜20%: 良好\n🟡 5〜10%: 普通\n🔴 5%未満: 要改善\n\nウォーレン・バフェットは15%以上を優良企業の目安とします。" },
+  dcf:{ title:"DCF適正株価（ディスカウントキャッシュフロー）", body:"将来のキャッシュフローを現在価値に割り引いて計算した理論株価です。\n\n• 現在株価 < DCF適正値: 割安の可能性\n• 現在株価 > DCF適正値: 割高の可能性\n\n注意: 将来予測に基づくため、成長率・割引率の仮定によって大きく変わります。あくまで参考値としてご利用ください。" },
+  fundamental_score:{ title:"総合ファンダスコア", body:"PER・PBR・ROE・成長率・DCF適正価格などを総合評価したスコアです。\n\n🟢 70〜100: ファンダメンタル的に優良\n🟡 40〜69: 中程度・業種平均水準\n🔴 0〜39: 財務的に注意が必要" },
+  overall_score:{ title:"買い推奨度スコア", body:"AIが株価トレンド・バリュエーション・モメンタム・リスクなどを総合的に評価したスコアです。\n\n🟢 70〜100: 今すぐ買い推奨\n🟡 40〜69: 条件付き・様子見\n🔴 0〜39: 見送り推奨\n\n※AIによる推定値であり、投資判断は自己責任でお願いします。" },
+  risk_reward:{ title:"リスクリワード比（R/R）", body:"利益目標 ÷ 損失リスクで計算されるコストパフォーマンス指標。\n\n例: R/R = 1:3 の場合\n→ 損切り$10に対して利確目標$30\n\n🟢 1:2以上: 良好なトレード設定\n🟡 1:1〜2: 最低限許容範囲\n🔴 1:1未満: リスクが高い\n\n一般的にプロのトレーダーは1:2以上を推奨します。" },
+  market_score:{ title:"マーケットスコア", body:"現在の米国株式市場全体の環境を0〜100で評価したスコアです。\n\nFRBの金融政策・VIX（恐怖指数）・経済指標・市場センチメントなどを総合します。\n\n🟢 70〜100: 強気相場・積極投資に適した環境\n🟡 40〜69: 中立・選択的に投資\n🔴 0〜39: 弱気相場・リスク管理を優先" },
+  diversification_score:{ title:"分散スコア", body:"ポートフォリオの分散具合を0〜100で評価したスコアです。\n\n評価基準:\n• セクター分散（複数業種に分散しているか）\n• 地域分散（米国のみか、国際分散されているか）\n• 銘柄集中度（1銘柄に偏りすぎていないか）\n• 相関度（保有銘柄の値動きの相関が低いか）\n\n🟢 70以上: 十分に分散\n🟡 40〜69: 部分的な集中リスク\n🔴 40未満: 集中リスク高・要改善" },
+  dca:{ title:"ドルコスト平均法（DCA）", body:"一定の金額を定期的に投資し続ける手法です。\n\n✅ メリット:\n• 買い時を気にせず自動的に分散投資できる\n• 価格が下がった時ほど多く買える\n• 感情的な判断ミスを防げる\n\n⚠ デメリット:\n• 急騰相場では一括投資より不利\n• 右肩下がりの銘柄では損失が拡大する\n\n長期的な資産形成に有効とされる投資戦略です。" },
+  sentiment_score:{ title:"センチメントスコア", body:"ニュースや市場の雰囲気から算出した感情スコアです。\n\n-100〜+100の範囲で表示:\n🟢 +21〜+100: 強気センチメント\n🟡 -20〜+20: 中立センチメント\n🔴 -100〜-21: 弱気センチメント\n\n短期的な株価の方向性を予測する参考指標です。極端な値は逆張りのサインになることもあります。" },
+  insider_confidence:{ title:"インサイダー信頼度スコア", body:"経営陣・役員などのインサイダーによる売買パターンから算出した信頼度スコアです。\n\n🟢 70以上: インサイダーの買いが優勢・強気シグナル\n🟡 40〜69: 中立・様子見\n🔴 40未満: インサイダーの売りが優勢・注意\n\nCEOや大口役員の自社株買いは業績への強い自信を示すことが多いです。ただし税務・報酬目的の売却は必ずしも弱気サインではありません。" },
+  squeeze_potential:{ title:"スクイーズポテンシャル", body:"空売り残高が高い銘柄で発生しうる「ショートスクイーズ」の可能性を0〜100で示します。\n\nショートスクイーズとは:\n株価が上昇すると空売りの買い戻しが殺到し、さらに株価が急騰する現象。\n\n🟢 0〜39: 低い（安全圏）\n🟡 40〜69: 中程度（注意）\n🔴 70以上: 高い（スクイーズ発生リスク大）\n\nゲームストップ（GME）の急騰はショートスクイーズの典型例です。" },
+  surprise_score:{ title:"サプライズスコア", body:"過去の決算サプライズ実績と今後の予測を総合したスコアです。\n\n🟢 70以上: 強いサプライズ傾向・株価上昇期待大\n🟡 40〜69: 中程度・不確実性高め\n🔴 40未満: ネガティブサプライズのリスク\n\n決算サプライズとは、実際のEPSがアナリスト予想を上回る（または下回る）こと。高いサプライズ率が続く銘柄は評価見直しによる株価上昇が期待できます。" },
+};
+function InfoBtn({ id }) {
+  const [open, setOpen] = useState(false);
+  const info = EXPLANATIONS[id];
+  if (!info) return null;
+  return (
+    <>
+      <button onClick={e=>{ e.stopPropagation(); setOpen(true); }}
+        style={{ background:"transparent", border:"none", color:"#2a4560", cursor:"pointer", fontSize:12, padding:"0 2px", lineHeight:1, flexShrink:0 }}>❓</button>
+      {open && (
+        <div onClick={()=>setOpen(false)}
+          style={{ position:"fixed", inset:0, background:"#000000b0", zIndex:9999, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 16px" }}>
+          <div onClick={e=>e.stopPropagation()}
+            style={{ background:"#09141e", border:"1px solid #1a3550", borderRadius:16, padding:"24px 20px", maxWidth:380, width:"100%", position:"relative", boxShadow:"0 24px 64px #000000cc" }}>
+            <div style={{ fontSize:15, fontWeight:900, color:"#e8f4ff", marginBottom:14, paddingRight:28 }}>{info.title}</div>
+            <div style={{ fontSize:12, color:"#7090a8", lineHeight:1.9, whiteSpace:"pre-wrap" }}>{info.body}</div>
+            <button onClick={()=>setOpen(false)}
+              style={{ position:"absolute", top:14, right:14, background:"#ffffff0d", border:"none", color:"#4a7090", fontSize:15, cursor:"pointer", width:28, height:28, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ── StockCard ─────────────────────────────────────────────────
 function StockCard({ stock, color, expanded, onToggle }) {
   const rc = { "強気買い":"#00e5a0","買い":"#60d0a0","積極買い":"#40c4ff" }[stock.rating]||"#00e5a0";
@@ -255,7 +301,7 @@ function StockCard({ stock, color, expanded, onToggle }) {
                   <div style={{ fontSize:10, color:"#b0a060", lineHeight:1.5 }}>{stock.sell_trigger}</div>
                 </div>
                 <div style={{ background:"#a78bfa10", border:"1px solid #a78bfa25", borderRadius:6, padding:"6px 8px" }}>
-                  <div style={{ fontSize:9, color:"#a78bfa", marginBottom:2 }}>⚖ R/R比</div>
+                  <div style={{ fontSize:9, color:"#a78bfa", marginBottom:2, display:"flex", alignItems:"center", gap:3 }}>⚖ R/R比<InfoBtn id="risk_reward"/></div>
                   <div style={{ fontSize:14, color:"#c0a0f0", fontWeight:900 }}>{stock.risk_reward}</div>
                 </div>
               </div>
@@ -362,7 +408,7 @@ function AnalysisTab({ initialTicker }) {
             </div>
             <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"14px 16px", marginBottom:10 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-                <span style={{ fontSize:11, color:"#4a7090" }}>買い推奨度</span>
+                <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:"#4a7090" }}>買い推奨度</span><InfoBtn id="overall_score"/></div>
                 <span style={{ fontSize:22, fontWeight:900, color:sc }}>{result.overall_score}<span style={{ fontSize:11 }}>/100</span></span>
               </div>
               <ScoreBar value={result.overall_score} color={sc}/>
@@ -546,7 +592,7 @@ function MacroTab() {
       {result&&!loading&&(
         <div style={{ animation:"fadeIn .4s ease" }}>
           <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:12, padding:16, marginBottom:12, textAlign:"center" }}>
-            <div style={{ fontSize:9, color:"#4a7090", letterSpacing:3, marginBottom:8 }}>MARKET SCORE · {result.updated}</div>
+            <div style={{ fontSize:9, color:"#4a7090", letterSpacing:3, marginBottom:8, display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>MARKET SCORE · {result.updated}<InfoBtn id="market_score"/></div>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:16, marginBottom:12 }}>
               <div style={{ fontSize:52, fontWeight:900, color:sc[result.sentiment]||"#00e5a0" }}>{result.market_score}</div>
               <div><div style={{ fontSize:22, fontWeight:900, color:sc[result.sentiment]||"#00e5a0" }}>{result.sentiment}相場</div><div style={{ fontSize:11, color:"#4a7090" }}>総合スコア /100</div></div>
@@ -785,7 +831,7 @@ function TechnicalTab() {
           {/* Score */}
           <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"14px 16px", marginBottom:10 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-              <span style={{ fontSize:11, color:"#4a7090" }}>総合テクニカルスコア</span>
+              <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:"#4a7090" }}>総合テクニカルスコア</span><InfoBtn id="tech_score"/></div>
               <span style={{ fontSize:22, fontWeight:900, color:result.tech_score>=70?"#00e5a0":result.tech_score>=40?"#ffd700":"#ff4d6d" }}>{result.tech_score}<span style={{ fontSize:11 }}>/100</span></span>
             </div>
             <ScoreBar value={result.tech_score} color={result.tech_score>=70?"#00e5a0":result.tech_score>=40?"#ffd700":"#ff4d6d"}/>
@@ -793,7 +839,7 @@ function TechnicalTab() {
           {/* RSI */}
           <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"12px 14px", marginBottom:8 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-              <span style={{ fontSize:11, color:"#4a7090" }}>RSI (14日)</span>
+              <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:"#4a7090" }}>RSI (14日)</span><InfoBtn id="rsi"/></div>
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                 <span style={{ fontSize:18, fontWeight:900, color:sigC[result.rsi?.signal]||"#ffd700" }}>{result.rsi?.value}</span>
                 <span style={{ fontSize:10, padding:"2px 8px", background:`${sigC[result.rsi?.signal]||"#ffd700"}22`, color:sigC[result.rsi?.signal]||"#ffd700", borderRadius:8 }}>{result.rsi?.signal}</span>
@@ -807,9 +853,9 @@ function TechnicalTab() {
           </div>
           {/* MACD + MA Cross */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
-            {[{label:"MACD",signal:result.macd?.signal,comment:result.macd?.comment},{label:"移動平均クロス",signal:result.ma_cross?.status,comment:result.ma_cross?.comment}].map(({label,signal,comment})=>(
+            {[{label:"MACD",infoId:"macd",signal:result.macd?.signal,comment:result.macd?.comment},{label:"移動平均クロス",infoId:"ma_cross",signal:result.ma_cross?.status,comment:result.ma_cross?.comment}].map(({label,infoId,signal,comment})=>(
               <div key={label} style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"12px 14px" }}>
-                <div style={{ fontSize:9, color:"#4a7090", letterSpacing:2, marginBottom:8 }}>{label}</div>
+                <div style={{ fontSize:9, color:"#4a7090", letterSpacing:2, marginBottom:8, display:"flex", alignItems:"center", gap:4 }}>{label}<InfoBtn id={infoId}/></div>
                 <div style={{ fontSize:14, fontWeight:900, color:sigC[signal]||"#ffd700", marginBottom:6 }}>{signal}</div>
                 <div style={{ fontSize:10, color:"#507090", lineHeight:1.5 }}>{comment}</div>
               </div>
@@ -818,7 +864,7 @@ function TechnicalTab() {
           {/* Bollinger */}
           <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"12px 14px", marginBottom:8 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-              <span style={{ fontSize:9, color:"#4a7090", letterSpacing:2 }}>ボリンジャーバンド</span>
+              <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:9, color:"#4a7090", letterSpacing:2 }}>ボリンジャーバンド</span><InfoBtn id="bollinger"/></div>
               <span style={{ fontSize:10, padding:"2px 8px", background:"#00c9ff22", color:"#00c9ff", borderRadius:8 }}>{result.bollinger?.position}</span>
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6 }}>
@@ -880,9 +926,9 @@ function FundamentalTab() {
           <div style={{ textAlign:"center", fontSize:18, fontWeight:900, color:"#e8f4ff", marginBottom:16 }}>{result.ticker} ファンダメンタル分析</div>
           {/* PER/PBR/ROE */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:10 }}>
-            {[{label:"PER",v:result.per?.value+"x",sig:result.per?.signal},{label:"PBR",v:result.pbr?.value+"x",sig:result.pbr?.signal},{label:"ROE",v:result.roe?.value+"%",sig:result.roe?.signal}].map(({label,v,sig})=>(
+            {[{label:"PER",infoId:"per",v:result.per?.value+"x",sig:result.per?.signal},{label:"PBR",infoId:"pbr",v:result.pbr?.value+"x",sig:result.pbr?.signal},{label:"ROE",infoId:"roe",v:result.roe?.value+"%",sig:result.roe?.signal}].map(({label,infoId,v,sig})=>(
               <div key={label} style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"10px 12px", textAlign:"center" }}>
-                <div style={{ fontSize:9, color:"#4a7090", marginBottom:4 }}>{label}</div>
+                <div style={{ fontSize:9, color:"#4a7090", marginBottom:4, display:"flex", alignItems:"center", justifyContent:"center", gap:3 }}>{label}<InfoBtn id={infoId}/></div>
                 <div style={{ fontSize:16, fontWeight:900, color:"#e8f4ff", marginBottom:4 }}>{v}</div>
                 <div style={{ fontSize:10, padding:"2px 6px", background:`${vc[sig]||"#ffd700"}22`, color:vc[sig]||"#ffd700", borderRadius:6, display:"inline-block" }}>{sig}</div>
               </div>
@@ -899,13 +945,13 @@ function FundamentalTab() {
           </div>
           {/* DCF */}
           <div style={{ background:"#a78bfa10", border:"1px solid #a78bfa25", borderRadius:8, padding:"10px 12px", marginBottom:10, textAlign:"center" }}>
-            <div style={{ fontSize:9, color:"#a78bfa", letterSpacing:2, marginBottom:6 }}>DCF 適正株価レンジ</div>
+            <div style={{ fontSize:9, color:"#a78bfa", letterSpacing:2, marginBottom:6, display:"flex", alignItems:"center", justifyContent:"center", gap:4 }}>DCF 適正株価レンジ<InfoBtn id="dcf"/></div>
             <div style={{ fontSize:20, fontWeight:900, color:"#c0a0f0" }}>{result.dcf_fair_value}</div>
           </div>
           {/* Score */}
           <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"14px 16px", marginBottom:10 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-              <span style={{ fontSize:11, color:"#4a7090" }}>総合ファンダスコア</span>
+              <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:"#4a7090" }}>総合ファンダスコア</span><InfoBtn id="fundamental_score"/></div>
               <span style={{ fontSize:22, fontWeight:900, color:result.fundamental_score>=70?"#00e5a0":result.fundamental_score>=40?"#ffd700":"#ff4d6d" }}>{result.fundamental_score}<span style={{ fontSize:11 }}>/100</span></span>
             </div>
             <ScoreBar value={result.fundamental_score} color={result.fundamental_score>=70?"#00e5a0":result.fundamental_score>=40?"#ffd700":"#ff4d6d"}/>
@@ -1023,7 +1069,7 @@ function StrategyTab() {
     <div style={{ padding:"16px 16px 8px" }}>
       {/* Tool 1: DCA */}
       <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:12, padding:"14px 16px", marginBottom:12 }}>
-        <div style={{ fontSize:13, fontWeight:700, color:"#00c9ff", marginBottom:12 }}>💰 ドルコスト平均法シミュレーター</div>
+        <div style={{ fontSize:13, fontWeight:700, color:"#00c9ff", marginBottom:12, display:"flex", alignItems:"center", gap:6 }}>💰 ドルコスト平均法シミュレーター<InfoBtn id="dca"/></div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
           {[["ticker","銘柄ティッカー (任意)"],["monthly","月額投資額 (円)"],["years","投資期間 (年)"],["rate","想定年率リターン (%)"]].map(([key,ph])=>(
             <div key={key}>
@@ -1106,7 +1152,7 @@ function StrategyTab() {
             </div>
             <div style={{ background:"#04090f", border:"1px solid #0d2030", borderRadius:8, padding:"10px 12px", marginBottom:8 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-                <span style={{ fontSize:11, color:"#4a7090" }}>分散スコア</span>
+                <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:"#4a7090" }}>分散スコア</span><InfoBtn id="diversification_score"/></div>
                 <span style={{ fontSize:20, fontWeight:900, color:riskResult.diversification_score>=70?"#00e5a0":riskResult.diversification_score>=40?"#ffd700":"#ff4d6d" }}>{riskResult.diversification_score}/100</span>
               </div>
               <ScoreBar value={riskResult.diversification_score} color={riskResult.diversification_score>=70?"#00e5a0":riskResult.diversification_score>=40?"#ffd700":"#ff4d6d"}/>
@@ -1192,7 +1238,7 @@ function NewsSentimentPanel() {
         <div style={{ animation:"fadeIn .3s ease" }}>
           <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:12, padding:"14px 16px", marginBottom:12 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-              <span style={{ fontSize:11, color:"#4a7090" }}>総合センチメントスコア</span>
+              <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:"#4a7090" }}>総合センチメントスコア</span><InfoBtn id="sentiment_score"/></div>
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                 <span style={{ fontSize:22, fontWeight:900, color:verdictC[result.verdict]||"#ffd700" }}>{result.overall_score>0?"+":""}{result.overall_score}</span>
                 <span style={{ fontSize:11, padding:"3px 10px", background:`${verdictC[result.verdict]||"#ffd700"}22`, color:verdictC[result.verdict]||"#ffd700", borderRadius:8, border:`1px solid ${verdictC[result.verdict]||"#ffd700"}44` }}>{result.verdict}</span>
@@ -1307,7 +1353,7 @@ function InsiderPanel() {
           </div>
           <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"12px 14px", marginBottom:12 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-              <span style={{ fontSize:11, color:"#4a7090" }}>インサイダー信頼度スコア</span>
+              <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:"#4a7090" }}>インサイダー信頼度スコア</span><InfoBtn id="insider_confidence"/></div>
               <span style={{ fontSize:20, fontWeight:900, color:result.confidence_score>=70?"#00e5a0":result.confidence_score>=40?"#ffd700":"#ff4d6d" }}>{result.confidence_score}<span style={{ fontSize:11 }}>/100</span></span>
             </div>
             <ScoreBar value={result.confidence_score} color={result.confidence_score>=70?"#00e5a0":result.confidence_score>=40?"#ffd700":"#ff4d6d"}/>
@@ -1363,7 +1409,7 @@ function ShortPanel() {
           </div>
           <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"12px 14px", marginBottom:12 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-              <span style={{ fontSize:11, color:"#4a7090" }}>🔥 スクイーズポテンシャル</span>
+              <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:"#4a7090" }}>🔥 スクイーズポテンシャル</span><InfoBtn id="squeeze_potential"/></div>
               <span style={{ fontSize:20, fontWeight:900, color:result.squeeze_potential>=70?"#ff6b35":result.squeeze_potential>=40?"#ffd700":"#00e5a0" }}>{result.squeeze_potential}<span style={{ fontSize:11 }}>/100</span></span>
             </div>
             <ScoreBar value={result.squeeze_potential} color={result.squeeze_potential>=70?"#ff6b35":result.squeeze_potential>=40?"#ffd700":"#00e5a0"}/>
@@ -1452,7 +1498,7 @@ function EarningsPanel() {
           </div>
           <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"12px 14px" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-              <span style={{ fontSize:11, color:"#4a7090" }}>サプライズスコア</span>
+              <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:"#4a7090" }}>サプライズスコア</span><InfoBtn id="surprise_score"/></div>
               <span style={{ fontSize:20, fontWeight:900, color:result.surprise_score>=70?"#00e5a0":result.surprise_score>=40?"#ffd700":"#ff4d6d" }}>{result.surprise_score}<span style={{ fontSize:11 }}>/100</span></span>
             </div>
             <ScoreBar value={result.surprise_score} color={result.surprise_score>=70?"#00e5a0":result.surprise_score>=40?"#ffd700":"#ff4d6d"}/>
