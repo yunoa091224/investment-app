@@ -655,25 +655,133 @@ function TechnicalTab() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [phase, setPhase] = useState(0);
-  const phaseRef = useRef(null);
-  const phases = ["📊 チャートデータを取得中...","📈 インジケーターを計算中...","🤖 パターン認識中...","✅ レポート生成中..."];
-  async function analyze(){
-    const t=ticker.trim().toUpperCase();if(!t)return;
-    setLoading(true);setResult(null);setError(null);setPhase(0);
-    phaseRef.current=setInterval(()=>setPhase(i=>(i+1)%phases.length),800);
-    try{const d=await callAPI(TECHNICAL_PROMPT,`${t}のテクニカル分析をしてください。JSONのみ返してください。`);setResult(d);}
-    catch(e){setError(e.message);}
-    finally{clearInterval(phaseRef.current);setLoading(false);}
+  const [realData, setRealData] = useState(null);
+  const phases = [
+    "📡 リアルタイムデータ取得中...",
+    "📊 インジケーター解析中...",
+    "🤖 AI分析中...",
+    "✅ レポート生成中...",
+  ];
+
+  async function fetchTwelveData(symbol) {
+    const KEY = import.meta.env.VITE_TWELVE_DATA_KEY;
+    const B = "https://api.twelvedata.com";
+    const [priceR, rsiR, macdR, sma50R, sma200R, bbandsR] = await Promise.allSettled([
+      fetch(`${B}/price?symbol=${symbol}&apikey=${KEY}`).then(r => r.json()),
+      fetch(`${B}/rsi?symbol=${symbol}&interval=1day&apikey=${KEY}`).then(r => r.json()),
+      fetch(`${B}/macd?symbol=${symbol}&interval=1day&apikey=${KEY}`).then(r => r.json()),
+      fetch(`${B}/sma?symbol=${symbol}&interval=1day&time_period=50&apikey=${KEY}`).then(r => r.json()),
+      fetch(`${B}/sma?symbol=${symbol}&interval=1day&time_period=200&apikey=${KEY}`).then(r => r.json()),
+      fetch(`${B}/bbands?symbol=${symbol}&interval=1day&apikey=${KEY}`).then(r => r.json()),
+    ]);
+    const ok = r => r.status === "fulfilled" && r.value?.status !== "error";
+    const price   = ok(priceR)   ? priceR.value.price                        : null;
+    const rsi     = ok(rsiR)     && rsiR.value.values?.[0]   ? parseFloat(rsiR.value.values[0].rsi).toFixed(1)   : null;
+    const macd    = ok(macdR)    && macdR.value.values?.[0]  ? macdR.value.values[0]                             : null;
+    const sma50   = ok(sma50R)   && sma50R.value.values?.[0] ? parseFloat(sma50R.value.values[0].sma).toFixed(2) : null;
+    const sma200  = ok(sma200R)  && sma200R.value.values?.[0]? parseFloat(sma200R.value.values[0].sma).toFixed(2): null;
+    const bbands  = ok(bbandsR)  && bbandsR.value.values?.[0]? bbandsR.value.values[0]                          : null;
+    const fetched = [price, rsi, macd, sma50, sma200, bbands].filter(Boolean).length;
+    return { price, rsi, macd, sma50, sma200, bbands, fetched, total: 6 };
   }
-  const sigC={"過熱":"#ff4d6d","中立":"#ffd700","底値":"#00e5a0","買い":"#00e5a0","売り":"#ff4d6d","ゴールデン":"#00e5a0","デッド":"#ff4d6d","なし":"#4a7090"};
+
+  async function analyze() {
+    const t = ticker.trim().toUpperCase(); if (!t) return;
+    setLoading(true); setResult(null); setError(null); setRealData(null);
+
+    // Step 1: Twelve Data からリアルタイムデータ取得
+    setPhase(0);
+    let td = { price:null, rsi:null, macd:null, sma50:null, sma200:null, bbands:null, fetched:0, total:6 };
+    try { td = await fetchTwelveData(t); setRealData(td); }
+    catch (_) { /* フォールバック: AI推定 */ }
+
+    // Step 2: インジケーター解析フェーズ表示
+    setPhase(1);
+
+    // 実データをプロンプトに組み込む
+    const lines = [];
+    if (td.price)  lines.push(`・現在価格: $${parseFloat(td.price).toFixed(2)}`);
+    if (td.rsi)    lines.push(`・RSI(14日): ${td.rsi}`);
+    if (td.macd)   lines.push(`・MACD: ${parseFloat(td.macd.macd).toFixed(4)}, Signal: ${parseFloat(td.macd.macd_signal).toFixed(4)}, Hist: ${parseFloat(td.macd.macd_hist).toFixed(4)}`);
+    if (td.sma50)  lines.push(`・SMA50: $${td.sma50}`);
+    if (td.sma200) lines.push(`・SMA200: $${td.sma200}`);
+    if (td.bbands) lines.push(`・ボリンジャーバンド: 上限=$${parseFloat(td.bbands.upper_band).toFixed(2)}, 中心=$${parseFloat(td.bbands.middle_band).toFixed(2)}, 下限=$${parseFloat(td.bbands.lower_band).toFixed(2)}`);
+    const dataSection = lines.length > 0
+      ? `\n【実際の市場データ（Twelve Data API取得）】\n${lines.join("\n")}\n上記の実データを必ず優先して使用し、rsi.valueには${td.rsi}を設定してください。`
+      : "\n（注: APIデータ取得失敗のため、知識ベースで推定分析してください）";
+
+    // Step 3: Claude API で解釈・分析
+    setPhase(2);
+    try {
+      const d = await callAPI(TECHNICAL_PROMPT, `${t}のテクニカル分析をしてください。${dataSection}\nJSONのみ返してください。`);
+      setPhase(3);
+      setResult(d);
+    } catch (e) { setError(e.message); }
+
+    setLoading(false);
+  }
+
+  const sigC = {"過熱":"#ff4d6d","中立":"#ffd700","底値":"#00e5a0","買い":"#00e5a0","売り":"#ff4d6d","ゴールデン":"#00e5a0","デッド":"#ff4d6d","なし":"#4a7090"};
+
+  function DataBadge() {
+    if (!realData) return null;
+    const { fetched, total } = realData;
+    const [color, text] = fetched === total
+      ? ["#00e5a0", "📡 リアルタイムデータ取得済み"]
+      : fetched > 0
+      ? ["#ffd700", `📡 一部データ取得済み (${fetched}/${total})`]
+      : ["#ff4d6d", "⚠ データ取得失敗（AI推定値）"];
+    return (
+      <div style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"4px 10px", background:`${color}15`, border:`1px solid ${color}40`, borderRadius:12, marginBottom:12 }}>
+        <span style={{ width:6, height:6, borderRadius:"50%", background:color, display:"inline-block", animation:"pulse 1.5s infinite" }}/>
+        <span style={{ fontSize:10, color, fontWeight:700 }}>{text}</span>
+      </div>
+    );
+  }
+
   return (
     <div style={{ padding:"16px 16px 8px" }}>
       <InputRow value={ticker} onChange={setTicker} onEnter={analyze} placeholder="ティッカー例: NVDA, AAPL" loading={loading} btnLabel="分析する" btnColor="#a78bfa"/>
-      {loading&&<LoadingDots color="#a78bfa" phases={phases} phase={phase}/>}
-      {error&&<ErrBox msg={error}/>}
-      {result&&!loading&&(
+      {loading && <LoadingDots color="#a78bfa" phases={phases} phase={phase}/>}
+      {error && <ErrBox msg={error}/>}
+      {result && !loading && (
         <div style={{ animation:"fadeIn .3s ease" }}>
-          <div style={{ textAlign:"center", fontSize:18, fontWeight:900, color:"#e8f4ff", marginBottom:16 }}>{result.ticker} テクニカル分析</div>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+            <div style={{ fontSize:18, fontWeight:900, color:"#e8f4ff" }}>{result.ticker} テクニカル分析</div>
+          </div>
+          <DataBadge/>
+          {/* リアルタイム生データ表示 */}
+          {realData && realData.fetched > 0 && (
+            <div style={{ background:"#04090f", border:"1px solid #a78bfa30", borderRadius:8, padding:"10px 12px", marginBottom:12 }}>
+              <div style={{ fontSize:9, color:"#a78bfa", letterSpacing:2, marginBottom:8 }}>📡 取得済みリアルタイムデータ</div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
+                {realData.price  && <div><span style={{ fontSize:9, color:"#4a7090" }}>現在価格: </span><span style={{ fontSize:12, color:"#e8f4ff", fontWeight:700 }}>${parseFloat(realData.price).toFixed(2)}</span></div>}
+                {realData.rsi    && <div><span style={{ fontSize:9, color:"#4a7090" }}>RSI(14): </span><span style={{ fontSize:12, color:"#ffd700", fontWeight:700 }}>{realData.rsi}</span></div>}
+                {realData.sma50  && <div><span style={{ fontSize:9, color:"#4a7090" }}>SMA50: </span><span style={{ fontSize:12, color:"#00c9ff", fontWeight:700 }}>${realData.sma50}</span></div>}
+                {realData.sma200 && <div><span style={{ fontSize:9, color:"#4a7090" }}>SMA200: </span><span style={{ fontSize:12, color:"#00c9ff", fontWeight:700 }}>${realData.sma200}</span></div>}
+                {realData.macd && (
+                  <div style={{ gridColumn:"span 2" }}>
+                    <span style={{ fontSize:9, color:"#4a7090" }}>MACD: </span>
+                    <span style={{ fontSize:11, color:"#ff6b35", fontWeight:700 }}>{parseFloat(realData.macd.macd).toFixed(3)}</span>
+                    <span style={{ fontSize:9, color:"#4a7090" }}> Sig: </span>
+                    <span style={{ fontSize:11, color:"#ff6b35", fontWeight:700 }}>{parseFloat(realData.macd.macd_signal).toFixed(3)}</span>
+                    <span style={{ fontSize:9, color:"#4a7090" }}> Hist: </span>
+                    <span style={{ fontSize:11, color:parseFloat(realData.macd.macd_hist)>=0?"#00e5a0":"#ff4d6d", fontWeight:700 }}>{parseFloat(realData.macd.macd_hist).toFixed(3)}</span>
+                  </div>
+                )}
+                {realData.bbands && (
+                  <div style={{ gridColumn:"span 2" }}>
+                    <span style={{ fontSize:9, color:"#4a7090" }}>BB上: </span>
+                    <span style={{ fontSize:11, color:"#ff4d6d", fontWeight:700 }}>${parseFloat(realData.bbands.upper_band).toFixed(2)}</span>
+                    <span style={{ fontSize:9, color:"#4a7090" }}> 中: </span>
+                    <span style={{ fontSize:11, color:"#ffd700", fontWeight:700 }}>${parseFloat(realData.bbands.middle_band).toFixed(2)}</span>
+                    <span style={{ fontSize:9, color:"#4a7090" }}> 下: </span>
+                    <span style={{ fontSize:11, color:"#00e5a0", fontWeight:700 }}>${parseFloat(realData.bbands.lower_band).toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           {/* Score */}
           <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"14px 16px", marginBottom:10 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
