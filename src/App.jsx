@@ -140,13 +140,21 @@ async function fetchFinnhubBatchPrices(symbols) {
     return {};
   }
   const settled = await Promise.allSettled(
-    symbols.map(s => fetchFinnhubPrice(s).then(price => ({ s, price })))
+    symbols.map(async s => {
+      const res  = await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(s)}&token=${KEY}`);
+      const data = await res.json();
+      const price = data?.c != null && data.c !== 0 ? parseFloat(data.c)  : null;
+      const dp    = data?.dp != null               ? parseFloat(data.dp) : null;
+      return { s, price, dp };
+    })
   );
   const result = {};
   for (const r of settled) {
-    if (r.status === 'fulfilled' && r.value.price != null) result[r.value.s] = r.value.price;
+    if (r.status === 'fulfilled' && r.value.price != null) {
+      result[r.value.s] = { price: r.value.price, dp: r.value.dp };
+    }
   }
-  console.log("[Finnhub] fetched prices:", result, `(${Object.keys(result).length}/${symbols.length}銘柄)`);
+  console.log("[Finnhub] fetched quotes:", result, `(${Object.keys(result).length}/${symbols.length}銘柄)`);
   return result;
 }
 
@@ -176,7 +184,10 @@ async function fetchRankingIndicators(symbols) {
   return result;
 }
 
-function mergeRealPrice(stock, realPrice, techData) {
+function mergeRealPrice(stock, quote, techData) {
+  // quote は { price, dp } オブジェクトまたは null
+  const realPrice = quote?.price ?? null;
+  const dp        = quote?.dp    ?? null;
   if (!realPrice) {
     const aiPrice   = stock.current_price ? parseFloat(stock.current_price.replace(/[^0-9.]/g, "")) : null;
     const targetNum = parseFloat((stock.target_price || "0").replace(/[^0-9.]/g, ""));
@@ -242,13 +253,19 @@ function mergeRealPrice(stock, realPrice, techData) {
   const reward  = tp2Price - p;
   const rrStr   = risk > 0 && reward > 0 ? `1:${(reward / risk).toFixed(1)}` : "1:1.0";
 
-  const targetNum = parseFloat((stock.target_price || "0").replace(/[^0-9.]/g, ""));
-  const upsidePct = targetNum ? ((targetNum - p) / p * 100) : null;
+  // upside = 前日比%（Finnhub dp）、未取得時は目標株価ベースにフォールバック
+  const upsideStr = dp != null
+    ? `${dp >= 0 ? "+" : ""}${dp.toFixed(2)}%`
+    : (() => {
+        const targetNum = parseFloat((stock.target_price || "0").replace(/[^0-9.]/g, ""));
+        const pct = targetNum ? ((targetNum - p) / p * 100) : null;
+        return pct !== null ? `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%` : stock.upside;
+      })();
 
   return {
     ...stock,
     current_price: `$${p.toFixed(2)}`,
-    upside:        upsidePct !== null ? `${upsidePct >= 0 ? "+" : ""}${upsidePct.toFixed(1)}%` : stock.upside,
+    upside:        upsideStr,
     entry_zone:    `$${entryLow}〜$${entryHigh}`,
     stop_loss:     `$${stopPrice} ${fmt(stopPct)}`,
     take_profit1:  `$${tp1Price} ${fmt(tp1Pct)}`,
@@ -412,12 +429,43 @@ function ErrBox({ msg, onRetry }) {
   );
 }
 
-// ── Disclaimer ────────────────────────────────────────────────
+// ── Disclaimer (inline) ───────────────────────────────────────
 function Disclaimer() {
   return (
     <div style={{ padding:"12px 14px", background:"#06111a", border:"1px solid #1a2e40", borderRadius:8, fontSize:10, color:"#3a5570", lineHeight:1.9, marginTop:12 }}>
       <div style={{ fontSize:9, color:"#ff6b35", letterSpacing:2, marginBottom:5, fontWeight:700 }}>⚠ 免責事項</div>
       本アプリが提供する情報はAI（Claude）による<span style={{ color:"#ff9040" }}>参考情報</span>であり、<span style={{ color:"#ff9040" }}>投資勧誘・投資助言を目的としたものではありません</span>。分析結果の正確性・完全性を保証するものではなく、実際の株価・財務データと乖離する場合があります。投資判断は必ずご自身の責任において行ってください。過去の実績・予測は将来の成果を保証するものではありません。
+    </div>
+  );
+}
+
+// ── DisclaimerModal (初回アクセス時) ──────────────────────────
+function DisclaimerModal({ onAccept }) {
+  const [checked, setChecked] = useState(false);
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#000000e0", zIndex:10000, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 16px" }}>
+      <div style={{ background:"#09141e", border:"1px solid #1a3550", borderRadius:16, padding:"28px 20px", maxWidth:420, width:"100%", boxShadow:"0 24px 64px #000000cc", maxHeight:"90vh", overflowY:"auto" }}>
+        <div style={{ fontSize:9, color:"#ff6b35", letterSpacing:3, marginBottom:8, fontWeight:700 }}>⚠ ご利用前にお読みください</div>
+        <div style={{ fontSize:20, fontWeight:900, color:"#e8f4ff", marginBottom:4 }}>Kabu.AI</div>
+        <div style={{ fontSize:12, color:"#4a7090", marginBottom:20 }}>免責事項</div>
+        <div style={{ fontSize:12, color:"#6090a8", lineHeight:1.9, marginBottom:20 }}>
+          本サービスは<span style={{ color:"#ff9040" }}>投資情報の提供を目的</span>としており、投資勧誘・投資助言を目的としたものでは<span style={{ color:"#ff9040" }}>ありません</span>。<br/><br/>
+          提供する情報はAI（Claude）による参考情報であり、<span style={{ color:"#ff9040" }}>正確性・完全性を保証するものではありません</span>。実際の株価・財務データと乖離する場合があります。<br/><br/>
+          投資判断は必ず<span style={{ color:"#e8f4ff", fontWeight:700 }}>ご自身の責任</span>において行ってください。本サービスを利用したことによる損失について、一切の責任を負いません。<br/><br/>
+          過去の実績・AI予測は将来の成果を保証するものではありません。
+        </div>
+        <label style={{ display:"flex", alignItems:"flex-start", gap:10, marginBottom:20, cursor:"pointer" }}>
+          <input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)}
+            style={{ marginTop:3, accentColor:"#00e5a0", flexShrink:0, width:15, height:15 }}/>
+          <span style={{ fontSize:12, color:"#8ab0c8", lineHeight:1.7 }}>
+            上記の免責事項を理解しました。投資判断は自己責任で行います。
+          </span>
+        </label>
+        <button onClick={() => checked && onAccept()} disabled={!checked}
+          style={{ width:"100%", padding:"14px", background:checked?"#00e5a022":"#0d2535", border:`1px solid ${checked?"#00e5a055":"#0d2535"}`, borderRadius:10, color:checked?"#00e5a0":"#2a4560", cursor:checked?"pointer":"not-allowed", fontFamily:"inherit", fontSize:14, fontWeight:700, transition:"all .2s" }}>
+          同意して Kabu.AI を始める →
+        </button>
+      </div>
     </div>
   );
 }
@@ -1964,11 +2012,14 @@ const TABS = [
 export default function App() {
   const [activeTab, setActiveTab] = useState("ranking");
   const [analysisTicker, setAnalysisTicker] = useState("");
+  const [showDisclaimer, setShowDisclaimer] = useState(() => !localStorage.getItem("kabuai_disclaimer_v1"));
   function jumpToAnalysis(ticker){ setAnalysisTicker(ticker); setActiveTab("analysis"); }
+  function acceptDisclaimer(){ localStorage.setItem("kabuai_disclaimer_v1","1"); setShowDisclaimer(false); }
   return (
     <ErrorBoundary>
       <ForexProvider>
       <div style={{ minHeight:"100vh", background:"#04090f", fontFamily:"'Courier New', monospace", color:"#c8d8e8", paddingBottom:72 }}>
+        {showDisclaimer && <DisclaimerModal onAccept={acceptDisclaimer}/>}
         <style>{`
           @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
           @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
@@ -1984,7 +2035,9 @@ export default function App() {
               <span style={{ width:7, height:7, borderRadius:"50%", background:"#00e5a0", display:"inline-block", animation:"pulse 1.5s infinite" }}/>
               <span style={{ fontSize:9, letterSpacing:4, color:"#00e5a0" }}>AI INVESTMENT INTELLIGENCE · LIVE</span>
             </div>
-            <h1 style={{ margin:0, fontSize:"clamp(18px,4vw,26px)", fontWeight:900, color:"#eaf4ff" }}>プロ級AI投資アシスタント</h1>
+            <h1 style={{ margin:0, fontSize:"clamp(22px,5vw,32px)", fontWeight:900, color:"#eaf4ff", letterSpacing:-1 }}>
+              Kabu<span style={{ color:"#00e5a0" }}>.AI</span>
+            </h1>
             <ForexBadge/>
           </div>
         </div>
