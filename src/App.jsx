@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Component } from "react";
+import { useState, useEffect, useRef, Component, createContext, useContext } from "react";
 import { jsonrepair } from 'jsonrepair';
 
 class ErrorBoundary extends Component {
@@ -25,8 +25,8 @@ const PERIODS = [
 ];
 
 const RANKING_PROMPT = `あなたは世界トップクラスの株式アナリストです。現時点（2026年5月末）での投資推奨トップ10を作成してください。以下のJSON形式のみで回答（前置き・説明・マークダウン一切不要）:
-{"updated":"2026年5月28日","market_comment":"市場環境2〜3文","stocks":[{"rank":1,"ticker":"NVDA","company":"NVIDIA","sector":"半導体","country":"🇺🇸","current_price":"$950","target_price":"$1200","upside":"+26%","score":9.2,"momentum":9,"growth":9,"safety":7,"catalyst":"Blackwell需要","risk":"競合リスク","reason":"AI需要拡大","rating":"強気買い","entry_zone":"$920〜$940","take_profit1":"$1050 +10%","take_profit2":"$1150 +21%","stop_loss":"$880 -7%","sell_trigger":"決算ミス・RSI75超","risk_reward":"1:3.2"}]}
-stocksは10件。ratingは「強気買い」「買い」「積極買い」のいずれか。scoreは小数点1桁(1-10)。momentum/growth/safetyは整数(1-10)。改行なしの1行JSONのみ。`;
+{"updated":"2026年5月28日","market_comment":"市場環境2〜3文","stocks":[{"rank":1,"ticker":"NVDA","company":"NVIDIA","sector":"半導体","country":"🇺🇸","current_price":"$950","target_price":"$1200","score":9.2,"momentum":9,"growth":9,"safety":7,"catalyst":"Blackwell需要","risk":"競合リスク","reason":"AI需要拡大","rating":"強気買い","entry_zone":"$920〜$940","take_profit1":"$1050","take_profit2":"$1150","stop_loss":"$880","sell_trigger":"決算ミス・RSI75超","risk_reward":"1:3.2"}]}
+stocksは10件。ratingは「強気買い」「買い」「積極買い」のいずれか。scoreは小数点1桁(1-10)。momentum/growth/safetyは整数(1-10)。current_priceはAI推定値（リアルタイムAPIで上書きされる）。upsideは含めない。take_profit1・take_profit2・stop_lossは価格のみ（%不要）。改行なしの1行JSONのみ。`;
 
 const ANALYSIS_PROMPT = `あなたは世界トップクラスの株式アナリストです。指定銘柄を詳細分析し以下のJSON形式のみで回答（前置き・説明不要）:
 {"ticker":"NVDA","company":"NVIDIA Corporation","sector":"半導体","current_price":"$950","overall_score":82,"buy_rating":"今すぐ買い","entry_zone":"$920〜$945","stop_loss":"$885 -6.8%","take_profit1":"$1020 +7%","take_profit2":"$1100 +15%","take_profit3":"$1200 +26%","hold_period":"2〜4週間","risk_reward":"1:2.8","sell_triggers":["RSI75超え・過熱感","決算ガイダンス下方修正","中国規制強化"],"summary":"Blackwellチップ需要が想定超で...","pros":["AI需要急拡大","高い参入障壁"],"cons":["高バリュエーション","地政学リスク"]}
@@ -120,6 +120,171 @@ async function callAPI(systemPrompt, userMessage) {
   return safeParseJSON(tb.text);
 }
 
+// ── Ranking real-price helpers (Finnhub API) ──
+async function fetchFinnhubPrice(symbol) {
+  const KEY = import.meta.env.VITE_FINNHUB_KEY;
+  if (!KEY) return null;
+  const res = await fetch(
+    `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${KEY}`
+  );
+  const data = await res.json();
+  const price = data?.c;
+  return price != null && price !== 0 ? parseFloat(price) : null;
+}
+
+async function fetchFinnhubBatchPrices(symbols) {
+  if (!symbols.length) return {};
+  const KEY = import.meta.env.VITE_FINNHUB_KEY;
+  if (!KEY) {
+    console.warn("[Finnhub] VITE_FINNHUB_KEY が未設定です");
+    return {};
+  }
+  const settled = await Promise.allSettled(
+    symbols.map(s => fetchFinnhubPrice(s).then(price => ({ s, price })))
+  );
+  const result = {};
+  for (const r of settled) {
+    if (r.status === 'fulfilled' && r.value.price != null) result[r.value.s] = r.value.price;
+  }
+  console.log("[Finnhub] fetched prices:", result, `(${Object.keys(result).length}/${symbols.length}銘柄)`);
+  return result;
+}
+
+function mergeRealPrice(stock, realPrice) {
+  if (!realPrice) {
+    // リアルタイム価格取得失敗 → AI推定値のまま表示
+    const aiPrice = stock.current_price
+      ? parseFloat(stock.current_price.replace(/[^0-9.]/g, ""))
+      : null;
+    const targetNum = parseFloat((stock.target_price || "0").replace(/[^0-9.]/g, ""));
+    const upsidePct = aiPrice && targetNum ? ((targetNum - aiPrice) / aiPrice * 100) : null;
+    return {
+      ...stock,
+      upside: upsidePct !== null ? `${upsidePct >= 0 ? "+" : ""}${upsidePct.toFixed(1)}%` : null,
+      _realPrice: false,
+    };
+  }
+  const p = realPrice;
+  // リアルタイム価格から売買戦略を再計算
+  const entryLow  = Math.round(p * 0.95);
+  const entryHigh = Math.round(p * 0.97);
+  const stopPrice = Math.round(p * 0.90);
+  const tp1Price  = Math.round(p * 1.12);
+  const tp2Price  = Math.round(p * 1.22);
+  const stopPct   = ((stopPrice  - p) / p * 100).toFixed(1); // 負値
+  const tp1Pct    = ((tp1Price   - p) / p * 100).toFixed(1);
+  const tp2Pct    = ((tp2Price   - p) / p * 100).toFixed(1);
+  const risk      = p - stopPrice;
+  const reward    = tp2Price - p;
+  const rrStr     = `1:${(reward / risk).toFixed(1)}`;
+  const targetNum = parseFloat((stock.target_price || "0").replace(/[^0-9.]/g, ""));
+  const upsidePct = targetNum ? ((targetNum - p) / p * 100) : null;
+  return {
+    ...stock,
+    current_price: `$${p.toFixed(2)}`,
+    upside:        upsidePct !== null ? `${upsidePct >= 0 ? "+" : ""}${upsidePct.toFixed(1)}%` : stock.upside,
+    entry_zone:    `$${entryLow}〜$${entryHigh}`,
+    stop_loss:     `$${stopPrice} ${stopPct}%`,
+    take_profit1:  `$${tp1Price} +${tp1Pct}%`,
+    take_profit2:  `$${tp2Price} +${tp2Pct}%`,
+    risk_reward:   rrStr,
+    _realPrice: true,
+  };
+}
+
+// ── Forex Context ─────────────────────────────────────────────
+const ForexContext = createContext({ rate: null, updatedAt: null, loading: false, pendingSec: null, refetch: () => {} });
+
+function ForexProvider({ children }) {
+  const [rate, setRate] = useState(null);
+  const [updatedAt, setUpdatedAt] = useState(null);
+  const [loading, setLoading] = useState(false);
+  // 起動からの経過秒数（カウントダウン表示用）
+  const [pendingSec, setPendingSec] = useState(70);
+  const intervalRef = useRef(null);
+  const countdownRef = useRef(null);
+
+  async function fetchRate() {
+    const KEY = import.meta.env.VITE_TWELVE_DATA_KEY;
+    if (!KEY) return;
+    setLoading(true);
+    setPendingSec(null);
+    try {
+      const res = await fetch(`https://api.twelvedata.com/price?symbol=USD/JPY&apikey=${KEY}`);
+      const data = await res.json();
+      console.log("[TwelveData] forex response:", data);
+      if (data.price && data.status !== "error" && !data.code) {
+        setRate(parseFloat(data.price));
+        setUpdatedAt(new Date());
+      } else {
+        console.warn("[TwelveData] forex error:", data.code, data.message);
+      }
+    } catch (e) {
+      console.warn("為替レート取得失敗:", e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    // 無料プラン競合回避: 株価取得(8cr/分)の後に為替を取得
+    // 起動70秒後に初回取得、以降30分ごと（月800cr枠を節約）
+    let sec = 70;
+    countdownRef.current = setInterval(() => {
+      sec -= 1;
+      setPendingSec(s => s !== null ? s - 1 : null);
+      if (sec <= 0) clearInterval(countdownRef.current);
+    }, 1000);
+
+    const firstTimer = setTimeout(() => {
+      fetchRate();
+      intervalRef.current = setInterval(fetchRate, 30 * 60 * 1000);
+    }, 70 * 1000);
+
+    return () => {
+      clearTimeout(firstTimer);
+      clearInterval(countdownRef.current);
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
+
+  return (
+    <ForexContext.Provider value={{ rate, updatedAt, loading, pendingSec, refetch: fetchRate }}>
+      {children}
+    </ForexContext.Provider>
+  );
+}
+
+function useForex() { return useContext(ForexContext); }
+
+function ForexBadge() {
+  const { rate, updatedAt, loading, pendingSec, refetch } = useForex();
+  const timeStr = updatedAt
+    ? updatedAt.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })
+    : null;
+  const isPending = pendingSec !== null && pendingSec > 0 && !rate;
+  return (
+    <div onClick={isPending ? undefined : refetch}
+      title={isPending ? `株価取得後に為替を取得（あと${pendingSec}秒）` : "クリックで手動更新（30分ごと自動更新）"}
+      style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"4px 10px", background:"#00c9ff08", border:"1px solid #00c9ff22", borderRadius:10, cursor:isPending?"default":"pointer", marginTop:6 }}>
+      <span style={{ width:5, height:5, borderRadius:"50%",
+        background: loading ? "#ffd700" : isPending ? "#2a4560" : rate ? "#00c9ff" : "#4a7090",
+        display:"inline-block", animation: loading ? "pulse 1s infinite" : "none" }}/>
+      <span style={{ fontSize:10, fontWeight:700,
+        color: loading ? "#ffd700" : isPending ? "#2a4560" : rate ? "#00c9ff" : "#4a7090" }}>
+        {loading
+          ? "為替取得中..."
+          : isPending
+          ? `USD/JPY 取得待機中（${pendingSec}秒後）`
+          : rate
+          ? `1 USD = ${rate.toFixed(2)} 円`
+          : "為替レート未取得（手動更新可）"}
+      </span>
+      {timeStr && <span style={{ fontSize:9, color:"#2a4560" }}>{timeStr} 更新 · 30分毎</span>}
+    </div>
+  );
+}
+
 // ── Shared UI ────────────────────────────────────────────────
 function ScoreRing({ score, color }) {
   const r=20, circ=2*Math.PI*r;
@@ -175,6 +340,89 @@ function ErrBox({ msg, onRetry }) {
     <div style={{ padding:16, background:"#ff4d6d15", border:"1px solid #ff4d6d40", borderRadius:8, color:"#ff4d6d", fontSize:12 }}>
       ⚠ {msg}
       {onRetry && <button onClick={onRetry} style={{ marginLeft:12, padding:"4px 12px", background:"#ff4d6d22", border:"1px solid #ff4d6d55", borderRadius:6, color:"#ff4d6d", cursor:"pointer", fontFamily:"inherit", fontSize:11 }}>再試行</button>}
+    </div>
+  );
+}
+
+// ── Disclaimer ────────────────────────────────────────────────
+function Disclaimer() {
+  return (
+    <div style={{ padding:"12px 14px", background:"#06111a", border:"1px solid #1a2e40", borderRadius:8, fontSize:10, color:"#3a5570", lineHeight:1.9, marginTop:12 }}>
+      <div style={{ fontSize:9, color:"#ff6b35", letterSpacing:2, marginBottom:5, fontWeight:700 }}>⚠ 免責事項</div>
+      本アプリが提供する情報はAI（Claude）による<span style={{ color:"#ff9040" }}>参考情報</span>であり、<span style={{ color:"#ff9040" }}>投資勧誘・投資助言を目的としたものではありません</span>。分析結果の正確性・完全性を保証するものではなく、実際の株価・財務データと乖離する場合があります。投資判断は必ずご自身の責任において行ってください。過去の実績・予測は将来の成果を保証するものではありません。
+    </div>
+  );
+}
+
+// ── AnalysisBasis ─────────────────────────────────────────────
+function AnalysisBasis({ type, result, realData }) {
+  const [open, setOpen] = useState(false);
+
+  const getBasisItems = () => {
+    if (type === "analysis") {
+      const items = [];
+      if (result.overall_score !== undefined) items.push({ label:"買い推奨度スコア", value:`${result.overall_score}/100`, note:"株価トレンド・バリュエーション・モメンタム・リスクを総合評価" });
+      if (result.buy_rating) items.push({ label:"判定結果", value:result.buy_rating });
+      if (result.hold_period) items.push({ label:"推奨保有期間", value:result.hold_period });
+      if (result.risk_reward) items.push({ label:"リスクリワード比", value:result.risk_reward });
+      if (result.entry_zone) items.push({ label:"エントリーゾーン", value:result.entry_zone });
+      if (result.stop_loss) items.push({ label:"損切りライン", value:result.stop_loss });
+      return items;
+    }
+    if (type === "technical") {
+      const items = [];
+      const src = realData?.fetched > 0 ? `Finnhub + Twelve Data API (${realData.fetched}/${realData.total}項目)` : "AIナレッジベース（推定）";
+      items.push({ label:"データソース", value:src });
+      if (result.rsi) items.push({ label:"RSI(14日)", value:`${result.rsi.value} → ${result.rsi.signal}`, note:result.rsi.comment });
+      if (result.macd) items.push({ label:"MACD", value:result.macd.signal, note:result.macd.comment });
+      if (result.ma_cross) items.push({ label:"移動平均クロス", value:result.ma_cross.status, note:result.ma_cross.comment });
+      if (result.bollinger) items.push({ label:"ボリンジャーバンド位置", value:result.bollinger.position });
+      if (result.pattern) items.push({ label:"チャートパターン", value:result.pattern.name, note:result.pattern.description });
+      return items;
+    }
+    if (type === "fundamental") {
+      const items = [];
+      if (result.per) items.push({ label:"PER評価", value:`${result.per.value}x → ${result.per.signal}` });
+      if (result.pbr) items.push({ label:"PBR評価", value:`${result.pbr.value}x → ${result.pbr.signal}` });
+      if (result.roe) items.push({ label:"ROE評価", value:`${result.roe.value}% → ${result.roe.signal}` });
+      if (result.revenue_growth) items.push({ label:"売上成長率", value:result.revenue_growth });
+      if (result.profit_growth) items.push({ label:"利益成長率", value:result.profit_growth });
+      if (result.dcf_fair_value) items.push({ label:"DCF適正価格レンジ", value:result.dcf_fair_value, note:"将来キャッシュフロー割引による理論株価" });
+      if (result.fundamental_score !== undefined) items.push({ label:"総合ファンダスコア", value:`${result.fundamental_score}/100` });
+      return items;
+    }
+    return [];
+  };
+
+  const items = getBasisItems();
+  if (!items.length) return null;
+
+  return (
+    <div style={{ background:"#07111a", border:"1px solid #0d2535", borderRadius:8, marginTop:8, overflow:"hidden" }}>
+      <button onClick={() => setOpen(o => !o)}
+        style={{ width:"100%", padding:"10px 12px", background:"transparent", border:"none", color:"#4a7090", cursor:"pointer", fontFamily:"inherit", fontSize:11, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <span>📋 AI分析の根拠</span>
+        <span style={{ fontSize:10 }}>{open ? "▲ 閉じる" : "▼ 展開する"}</span>
+      </button>
+      {open && (
+        <div style={{ padding:"0 12px 12px", borderTop:"1px solid #0d2030" }}>
+          <div style={{ fontSize:9, color:"#2a4560", marginBottom:10, paddingTop:10 }}>
+            モデル: claude-haiku-4-5 · 分析日: {new Date().toLocaleDateString("ja-JP")}
+          </div>
+          {items.map((item, i) => (
+            <div key={i} style={{ marginBottom:8 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:item.note ? 2 : 0 }}>
+                <span style={{ fontSize:10, color:"#4a7090" }}>{item.label}</span>
+                <span style={{ fontSize:11, color:"#8ab0c8", fontWeight:700 }}>{item.value}</span>
+              </div>
+              {item.note && <div style={{ fontSize:10, color:"#3a5570", lineHeight:1.5 }}>{item.note}</div>}
+            </div>
+          ))}
+          <div style={{ marginTop:10, paddingTop:10, borderTop:"1px solid #0d2030", fontSize:9, color:"#2a4560" }}>
+            ※ 本分析はAIの知識ベースに基づく推定を含みます。実際のデータと異なる場合があります。
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -243,8 +491,20 @@ function StockCard({ stock, color, expanded, onToggle }) {
           <div style={{ fontSize:11, color:"#4a7090", marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{stock.company}</div>
         </div>
         <div style={{ textAlign:"right", flexShrink:0 }}>
-          <div style={{ fontSize:12, color:"#e8f4ff", fontWeight:700 }}>{stock.current_price}</div>
-          <div style={{ fontSize:12, color:"#00e5a0", fontWeight:700 }}>{stock.upside}</div>
+          <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-end" }}>
+            <span style={{ fontSize:12, color: stock._realPrice?"#e8f4ff":"#8090a0", fontWeight:700 }}>
+              {stock.current_price || "—"}
+            </span>
+            <span style={{ fontSize:8, padding:"1px 4px",
+              background: stock._realPrice ? "#00c9ff22" : "#ffffff08",
+              color:       stock._realPrice ? "#00c9ff"   : "#4a7090",
+              borderRadius:3, border:`1px solid ${stock._realPrice?"#00c9ff33":"#0d2030"}` }}>
+              {stock._realPrice ? "RT" : "AI推定"}
+            </span>
+          </div>
+          <div style={{ fontSize:12, color:String(stock.upside||"").startsWith("-")?"#ff4d6d":"#00e5a0", fontWeight:700 }}>
+            {stock.upside || "—"}
+          </div>
         </div>
         <ScoreRing score={stock.score} color={color}/>
       </div>
@@ -321,14 +581,24 @@ function RankingTab() {
   const [expandedId, setExpandedId] = useState(null);
   const [phaseIdx, setPhaseIdx] = useState(0);
   const phaseRef = useRef(null);
-  const phases = ["🌐 市場データを収集中...","📊 ニュース分析中...","🤖 10銘柄を選定中...","📈 スコアリング中...","✅ レポート生成中..."];
+  const phases = ["🌐 市場データを収集中...","📊 ニュース分析中...","🤖 10銘柄を選定中...","📈 スコアリング中...","📡 リアルタイム株価を取得中...","✅ レポート生成中..."];
   const cur = PERIODS.find(p=>p.key===period);
   const periodMap = { short:"短期（1〜4週間）スイングトレード向け", mid:"中期（1〜6ヶ月）トレンドフォロー向け", long:"長期（1〜3年）成長投資向け" };
   async function fetchRanking(p) {
     if (data[p]||loading[p]) return;
     setLoading(prev=>({...prev,[p]:true})); setPhaseIdx(0);
-    phaseRef.current = setInterval(()=>setPhaseIdx(i=>(i+1)%phases.length),900);
-    try { const r=await callAPI(RANKING_PROMPT,`2026年5月時点で${periodMap[p]}のおすすめ米国株トップ10を選定してください。JSONのみ返してください。`); setData(prev=>({...prev,[p]:r})); }
+    phaseRef.current = setInterval(()=>setPhaseIdx(i=>Math.min(i+1, phases.length-2)),1100);
+    try {
+      const r = await callAPI(RANKING_PROMPT, `2026年5月時点で${periodMap[p]}のおすすめ米国株トップ10を選定してください。JSONのみ返してください。`);
+      // Finnhub でリアルタイム株価を一括取得
+      clearInterval(phaseRef.current);
+      setPhaseIdx(phases.length - 2);
+      const tickers = (r.stocks || []).map(s => s.ticker);
+      const realPrices = await fetchFinnhubBatchPrices(tickers);
+      setPhaseIdx(phases.length - 1);
+      const merged = { ...r, stocks: (r.stocks || []).map(s => mergeRealPrice(s, realPrices[s.ticker])) };
+      setData(prev=>({...prev,[p]:merged}));
+    }
     catch(e) { setData(prev=>({...prev,[p]:{error:true,msg:e.message}})); }
     finally { clearInterval(phaseRef.current); setLoading(prev=>({...prev,[p]:false})); }
   }
@@ -356,9 +626,7 @@ function RankingTab() {
             {(d.stocks||[]).map(s=>(
               <StockCard key={s.rank} stock={s} color={cur.color} expanded={expandedId===`${period}-${s.rank}`} onToggle={()=>setExpandedId(expandedId===`${period}-${s.rank}`?null:`${period}-${s.rank}`)}/>
             ))}
-            <div style={{ marginTop:20, padding:14, background:"#07111a", border:"1px solid #0d2030", borderRadius:8, fontSize:9, color:"#253545", lineHeight:1.8, textAlign:"center" }}>
-              ⚠ 本ランキングはAI情報提供目的であり、投資勧誘・助言ではありません。
-            </div>
+            <Disclaimer/>
           </div>
         )}
       </div>
@@ -368,6 +636,7 @@ function RankingTab() {
 
 // ── Tab 2: Analysis ───────────────────────────────────────────
 function AnalysisTab({ initialTicker }) {
+  const { rate } = useForex();
   const [ticker, setTicker] = useState(initialTicker||"");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -380,7 +649,14 @@ function AnalysisTab({ initialTicker }) {
     const target=(t||ticker).trim().toUpperCase(); if(!target)return;
     setLoading(true);setResult(null);setError(null);setPhase(0);
     phaseRef.current=setInterval(()=>setPhase(i=>(i+1)%phases.length),800);
-    try{const d=await callAPI(ANALYSIS_PROMPT,`${target}を詳細分析してください。JSONのみ返してください。`);setResult(d);}
+    try{
+      const d=await callAPI(ANALYSIS_PROMPT,`${target}を詳細分析してください。JSONのみ返してください。`);
+      try {
+        const realPrice = await fetchFinnhubPrice(target);
+        if (realPrice != null) { d.current_price = `$${realPrice.toFixed(2)}`; d._realPrice = true; }
+      } catch (_) {}
+      setResult(d);
+    }
     catch(e){setError(e.message);}
     finally{clearInterval(phaseRef.current);setLoading(false);}
   }
@@ -399,7 +675,16 @@ function AnalysisTab({ initialTicker }) {
               <div>
                 <div style={{ fontSize:22, fontWeight:900, color:"#eaf4ff" }}>{result.ticker}</div>
                 <div style={{ fontSize:11, color:"#4a7090", marginBottom:4 }}>{result.company} · {result.sector}</div>
-                <div style={{ fontSize:15, color:"#e8f4ff", fontWeight:700 }}>{result.current_price}</div>
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <span style={{ fontSize:15, color:"#e8f4ff", fontWeight:700 }}>{result.current_price}</span>
+                  <span style={{ fontSize:8, padding:"1px 4px",
+                    background: result._realPrice ? "#00c9ff22" : "#ffffff08",
+                    color:      result._realPrice ? "#00c9ff"   : "#4a7090",
+                    borderRadius:3, border:`1px solid ${result._realPrice ? "#00c9ff33" : "#0d2030"}` }}>
+                    {result._realPrice ? "RT" : "AI推定"}
+                  </span>
+                </div>
+                {rate&&result.current_price&&<div style={{ fontSize:10, color:"#4a7090" }}>≈ ¥{Math.round(parseFloat(result.current_price.replace(/[^0-9.]/g,""))*rate).toLocaleString()}</div>}
               </div>
               <div style={{ textAlign:"center" }}>
                 <div style={{ padding:"10px 16px", background:v.bg, border:`1px solid ${v.border}`, borderRadius:12, color:v.color, fontSize:15, fontWeight:900, marginBottom:8 }}>{result.buy_rating}</div>
@@ -460,6 +745,8 @@ function AnalysisTab({ initialTicker }) {
               <div style={{ fontSize:9, color:"#00c9ff", letterSpacing:2, marginBottom:4 }}>▶ 総合サマリー</div>
               <div style={{ fontSize:12, color:"#8ab0c8", lineHeight:1.7 }}>{result.summary}</div>
             </div>
+            <AnalysisBasis type="analysis" result={result}/>
+            <Disclaimer/>
           </div>
         );
       })()}
@@ -469,6 +756,7 @@ function AnalysisTab({ initialTicker }) {
 
 // ── Tab 3: Portfolio ──────────────────────────────────────────
 function PortfolioTab() {
+  const { rate } = useForex();
   const [holdings, setHoldings] = useState(()=>{try{return JSON.parse(localStorage.getItem("portfolio_holdings")||"[]");}catch{return[];}});
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ticker:"",purchase_price:"",shares:"",purchase_date:""});
@@ -497,10 +785,15 @@ function PortfolioTab() {
     <div style={{ padding:"16px 16px 8px" }}>
       {diagnosis&&(
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:16 }}>
-          {[{label:"AI総合スコア",value:`${diagnosis.total_score}/100`,color:diagnosis.total_score>=70?"#00e5a0":diagnosis.total_score>=40?"#ffd700":"#ff4d6d"},{label:"合計損益(推計)",value:`${totalPnl>=0?"+":""}$${Math.round(totalPnl).toLocaleString()}`,color:totalPnl>=0?"#00e5a0":"#ff4d6d"},{label:"勝率",value:`${winRate}%`,color:winRate>=60?"#00e5a0":winRate>=40?"#ffd700":"#ff4d6d"}].map(({label,value,color})=>(
+          {[
+            {label:"AI総合スコア",value:`${diagnosis.total_score}/100`,color:diagnosis.total_score>=70?"#00e5a0":diagnosis.total_score>=40?"#ffd700":"#ff4d6d"},
+            {label:"合計損益(推計)",value:`${totalPnl>=0?"+":""}$${Math.round(totalPnl).toLocaleString()}`,sub:rate?`≈ ¥${Math.round(totalPnl*rate).toLocaleString()}`:null,color:totalPnl>=0?"#00e5a0":"#ff4d6d"},
+            {label:"勝率",value:`${winRate}%`,color:winRate>=60?"#00e5a0":winRate>=40?"#ffd700":"#ff4d6d"}
+          ].map(({label,value,sub,color})=>(
             <div key={label} style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"10px 12px", textAlign:"center" }}>
               <div style={{ fontSize:9, color:"#4a7090", marginBottom:4 }}>{label}</div>
               <div style={{ fontSize:14, fontWeight:900, color }}>{value}</div>
+              {sub&&<div style={{ fontSize:9, color:"#4a7090", marginTop:2 }}>{sub}</div>}
             </div>
           ))}
         </div>
@@ -541,7 +834,11 @@ function PortfolioTab() {
                     <div style={{ fontSize:10, color:"#4a7090", marginTop:2 }}>取得: ${h.purchase_price} × {h.shares}株{h.purchase_date&&` · ${h.purchase_date}`}</div>
                   </div>
                   <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                    {ep&&<div style={{ textAlign:"right" }}><div style={{ fontSize:13, color:"#e8f4ff", fontWeight:700 }}>${ep.toFixed(0)}<span style={{ fontSize:9, color:"#4a7090" }}> 推計</span></div><div style={{ fontSize:12, color:parseFloat(pnlPct)>=0?"#00e5a0":"#ff4d6d", fontWeight:700 }}>{parseFloat(pnlPct)>=0?"+":""}{pnlPct}%</div></div>}
+                    {ep&&<div style={{ textAlign:"right" }}>
+                      <div style={{ fontSize:13, color:"#e8f4ff", fontWeight:700 }}>${ep.toFixed(0)}<span style={{ fontSize:9, color:"#4a7090" }}> 推計</span></div>
+                      {rate&&<div style={{ fontSize:9, color:"#4a7090" }}>≈ ¥{Math.round(ep*rate).toLocaleString()}</div>}
+                      <div style={{ fontSize:12, color:parseFloat(pnlPct)>=0?"#00e5a0":"#ff4d6d", fontWeight:700 }}>{parseFloat(pnlPct)>=0?"+":""}{pnlPct}%</div>
+                    </div>}
                     <button onClick={()=>save(holdings.filter(x=>x.id!==h.id))} style={{ background:"#ff4d6d15", border:"1px solid #ff4d6d30", borderRadius:6, color:"#ff4d6d", cursor:"pointer", fontSize:11, padding:"4px 8px", fontFamily:"inherit" }}>削除</button>
                   </div>
                 </div>
@@ -563,6 +860,7 @@ function PortfolioTab() {
 
 // ── Tab 4: Macro ──────────────────────────────────────────────
 function MacroTab() {
+  const { rate, updatedAt } = useForex();
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -600,7 +898,14 @@ function MacroTab() {
             <ScoreBar value={result.market_score} color={sc[result.sentiment]||"#00e5a0"}/>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
-            {[["FRB政策",result.fed_stance,"#a78bfa"],["VIX",result.vix,"#ffd700"],["ドル円",result.usd_jpy,"#00c9ff"],["10年債利回り",result.bond_yield_10y,"#ff6b35"]].map(([label,value,color])=>(
+            {[
+              ["FRB政策",result.fed_stance,"#a78bfa"],
+              ["VIX",result.vix,"#ffd700"],
+              ["ドル円", rate
+                ? `${rate.toFixed(2)}円${updatedAt?" (RT)":""}`
+                : result.usd_jpy, "#00c9ff"],
+              ["10年債利回り",result.bond_yield_10y,"#ff6b35"]
+            ].map(([label,value,color])=>(
               <div key={label} style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:8, padding:"10px 12px" }}>
                 <div style={{ fontSize:9, color:"#4a7090", letterSpacing:2, marginBottom:4 }}>{label}</div>
                 <div style={{ fontSize:12, color, fontWeight:700, lineHeight:1.4 }}>{value}</div>
@@ -639,6 +944,7 @@ function MacroTab() {
             <div style={{ fontSize:12, color:"#8ab0c8", lineHeight:1.7 }}>{result.summary}</div>
           </div>
           <button onClick={analyze} style={{ width:"100%", padding:"10px", background:"#00c9ff0d", border:"1px solid #00c9ff25", borderRadius:8, color:"#4a7090", cursor:"pointer", fontFamily:"inherit", fontSize:12 }}>🔄 再分析する</button>
+          <Disclaimer/>
         </div>
       )}
     </div>
@@ -712,8 +1018,8 @@ function TechnicalTab() {
   async function fetchTwelveData(symbol) {
     const KEY = import.meta.env.VITE_TWELVE_DATA_KEY;
     const B = "https://api.twelvedata.com";
-    const [priceR, rsiR, macdR, sma50R, sma200R, bbandsR] = await Promise.allSettled([
-      fetch(`${B}/price?symbol=${symbol}&apikey=${KEY}`).then(r => r.json()),
+    // RSI/MACD/BBandsはTwelve Data、株価はFinnhubから取得
+    const [rsiR, macdR, sma50R, sma200R, bbandsR] = await Promise.allSettled([
       fetch(`${B}/rsi?symbol=${symbol}&interval=1day&apikey=${KEY}`).then(r => r.json()),
       fetch(`${B}/macd?symbol=${symbol}&interval=1day&apikey=${KEY}`).then(r => r.json()),
       fetch(`${B}/sma?symbol=${symbol}&interval=1day&time_period=50&apikey=${KEY}`).then(r => r.json()),
@@ -721,25 +1027,38 @@ function TechnicalTab() {
       fetch(`${B}/bbands?symbol=${symbol}&interval=1day&apikey=${KEY}`).then(r => r.json()),
     ]);
     const ok = r => r.status === "fulfilled" && r.value?.status !== "error";
-    const price   = ok(priceR)   ? priceR.value.price                        : null;
-    const rsi     = ok(rsiR)     && rsiR.value.values?.[0]   ? parseFloat(rsiR.value.values[0].rsi).toFixed(1)   : null;
-    const macd    = ok(macdR)    && macdR.value.values?.[0]  ? macdR.value.values[0]                             : null;
-    const sma50   = ok(sma50R)   && sma50R.value.values?.[0] ? parseFloat(sma50R.value.values[0].sma).toFixed(2) : null;
-    const sma200  = ok(sma200R)  && sma200R.value.values?.[0]? parseFloat(sma200R.value.values[0].sma).toFixed(2): null;
-    const bbands  = ok(bbandsR)  && bbandsR.value.values?.[0]? bbandsR.value.values[0]                          : null;
-    const fetched = [price, rsi, macd, sma50, sma200, bbands].filter(Boolean).length;
-    return { price, rsi, macd, sma50, sma200, bbands, fetched, total: 6 };
+    const rsi    = ok(rsiR)    && rsiR.value.values?.[0]    ? parseFloat(rsiR.value.values[0].rsi).toFixed(1)    : null;
+    const macd   = ok(macdR)   && macdR.value.values?.[0]   ? macdR.value.values[0]                             : null;
+    const sma50  = ok(sma50R)  && sma50R.value.values?.[0]  ? parseFloat(sma50R.value.values[0].sma).toFixed(2) : null;
+    const sma200 = ok(sma200R) && sma200R.value.values?.[0] ? parseFloat(sma200R.value.values[0].sma).toFixed(2): null;
+    const bbands = ok(bbandsR) && bbandsR.value.values?.[0] ? bbandsR.value.values[0]                          : null;
+    const fetched = [rsi, macd, sma50, sma200, bbands].filter(Boolean).length;
+    return { rsi, macd, sma50, sma200, bbands, fetched, total: 5 };
   }
 
   async function analyze() {
     const t = ticker.trim().toUpperCase(); if (!t) return;
     setLoading(true); setResult(null); setError(null); setRealData(null);
 
-    // Step 1: Twelve Data からリアルタイムデータ取得
+    // Step 1: Finnhub(株価) と Twelve Data(インジケーター) を並列取得
     setPhase(0);
     let td = { price:null, rsi:null, macd:null, sma50:null, sma200:null, bbands:null, fetched:0, total:6 };
-    try { td = await fetchTwelveData(t); setRealData(td); }
-    catch (_) { /* フォールバック: AI推定 */ }
+    try {
+      const [finnhubR, twelveR] = await Promise.allSettled([
+        fetchFinnhubPrice(t),
+        fetchTwelveData(t),
+      ]);
+      const price = finnhubR.status === 'fulfilled' ? finnhubR.value : null;
+      const ind = twelveR.status === 'fulfilled' ? twelveR.value
+        : { rsi:null, macd:null, sma50:null, sma200:null, bbands:null, fetched:0, total:5 };
+      td = {
+        price: price != null ? String(price) : null,
+        ...ind,
+        fetched: ind.fetched + (price != null ? 1 : 0),
+        total: 6,
+      };
+      setRealData(td);
+    } catch (_) { /* フォールバック: AI推定 */ }
 
     // Step 2: インジケーター解析フェーズ表示
     setPhase(1);
@@ -892,6 +1211,8 @@ function TechnicalTab() {
             <div style={{ fontSize:9, color:"#a78bfa", letterSpacing:2, marginBottom:4 }}>▶ 総合テクニカルコメント</div>
             <div style={{ fontSize:12, color:"#8ab0c8", lineHeight:1.7 }}>{result.overall_comment}</div>
           </div>
+          <AnalysisBasis type="technical" result={result} realData={realData}/>
+          <Disclaimer/>
         </div>
       )}
     </div>
@@ -995,6 +1316,8 @@ function FundamentalTab() {
             <div style={{ fontSize:9, color:"#ffd700", letterSpacing:2, marginBottom:4 }}>▶ 総合ファンダサマリー</div>
             <div style={{ fontSize:12, color:"#8ab0c8", lineHeight:1.7 }}>{result.summary}</div>
           </div>
+          <AnalysisBasis type="fundamental" result={result}/>
+          <Disclaimer/>
         </div>
       )}
     </div>
@@ -1561,6 +1884,7 @@ export default function App() {
   function jumpToAnalysis(ticker){ setAnalysisTicker(ticker); setActiveTab("analysis"); }
   return (
     <ErrorBoundary>
+      <ForexProvider>
       <div style={{ minHeight:"100vh", background:"#04090f", fontFamily:"'Courier New', monospace", color:"#c8d8e8", paddingBottom:72 }}>
         <style>{`
           @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
@@ -1578,6 +1902,7 @@ export default function App() {
               <span style={{ fontSize:9, letterSpacing:4, color:"#00e5a0" }}>AI INVESTMENT INTELLIGENCE · LIVE</span>
             </div>
             <h1 style={{ margin:0, fontSize:"clamp(18px,4vw,26px)", fontWeight:900, color:"#eaf4ff" }}>プロ級AI投資アシスタント</h1>
+            <ForexBadge/>
           </div>
         </div>
         <div style={{ maxWidth:680, margin:"0 auto" }}>
@@ -1600,6 +1925,7 @@ export default function App() {
           ))}
         </nav>
       </div>
+      </ForexProvider>
     </ErrorBoundary>
   );
 }
