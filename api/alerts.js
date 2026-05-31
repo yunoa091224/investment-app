@@ -7,7 +7,7 @@ async function readAlerts() {
   const { blobs } = await list({ prefix: 'kabuai-alerts/' });
   if (blobs.length === 0) return [];
   try {
-    const r = await fetch(blobs[0].url);
+    const r = await fetch(blobs[0].downloadUrl);
     return await r.json();
   } catch {
     return [];
@@ -16,7 +16,7 @@ async function readAlerts() {
 
 async function writeAlerts(alerts) {
   await put(BLOB_PATH, JSON.stringify(alerts), {
-    access: 'public',
+    access: 'private',
     addRandomSuffix: false,
     contentType: 'application/json',
   });
