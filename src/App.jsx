@@ -671,6 +671,7 @@ function StockCard({ stock, color, expanded, onToggle }) {
             <div style={{ fontSize:12, color:"#8ab0c8", lineHeight:1.7 }}>{stock.reason}</div>
           </div>
           {stock.entry_zone&&(
+            <>
             <div style={{ marginTop:8, background:"#06111a", border:"1px solid #0d2535", borderRadius:8, padding:"10px 12px" }}>
               <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:8 }}>
                 <span style={{ fontSize:9, color:"#ffd700", letterSpacing:2 }}>⚡ 売買戦略</span>
@@ -724,6 +725,7 @@ AIスコア: ${stock.score}/10　推奨: ${stock.rating}
 ${APP_URL}`
               }/>
             </div>
+            </>
           )}
         </div>
       )}
