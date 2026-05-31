@@ -2406,74 +2406,90 @@ function InfoCenterTab() {
 
 // ── Tab 10: Alert ─────────────────────────────────────────────
 function AlertTab() {
-  const [alerts, setAlerts]     = useState(() => JSON.parse(localStorage.getItem("kabuai_alerts") || "[]"));
+  const [alerts, setAlerts]     = useState([]);
+  const [loading, setLoading]   = useState(true);
   const [email, setEmail]       = useState(() => localStorage.getItem("kabuai_alert_email") || "");
   const [ticker, setTicker]     = useState("");
   const [targetPrice, setTargetPrice] = useState("");
   const [direction, setDirection] = useState("above");
-  const [status, setStatus]     = useState(null); // { msg, color }
+  const [status, setStatus]     = useState(null);
   const [checking, setChecking] = useState(false);
+  const [adding, setAdding]     = useState(false);
 
-  function saveAlerts(list) {
-    setAlerts(list);
-    localStorage.setItem("kabuai_alerts", JSON.stringify(list));
+  async function loadAlerts() {
+    try {
+      const r = await fetch("/api/alerts");
+      const data = await r.json();
+      setAlerts(Array.isArray(data) ? data : []);
+    } catch {
+      setAlerts([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { loadAlerts(); }, []);
+
+  function showStatus(msg, color, ms = 4000) {
+    setStatus({ msg, color });
+    setTimeout(() => setStatus(null), ms);
   }
 
   async function addAlert() {
     if (!email || !ticker || !targetPrice) {
-      return setStatus({ msg: "メールアドレス・銘柄・目標株価を入力してください", color: "#ff4d6d" });
+      return showStatus("メールアドレス・銘柄・目標株価を入力してください", "#ff4d6d");
     }
     localStorage.setItem("kabuai_alert_email", email);
-    const newAlert = { id: Date.now(), ticker: ticker.toUpperCase(), targetPrice: Number(targetPrice), direction, email };
-    const next = [...alerts, newAlert];
-    saveAlerts(next);
-    setTicker(""); setTargetPrice("");
-
+    setAdding(true);
     try {
-      await fetch("/api/send-alert", {
+      const r = await fetch("/api/alerts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, ticker: newAlert.ticker, targetPrice: newAlert.targetPrice, direction }),
+        body: JSON.stringify({ ticker, targetPrice: Number(targetPrice), direction, email }),
       });
-      setStatus({ msg: "アラートを設定しました。確認メールを送りました。", color: "#00e5a0" });
+      if (!r.ok) throw new Error();
+      setTicker(""); setTargetPrice("");
+      await loadAlerts();
+      showStatus("アラートを設定しました。確認メールを送りました。", "#00e5a0");
     } catch {
-      setStatus({ msg: "アラートを設定しました（メール送信失敗）", color: "#ffd700" });
+      showStatus("登録に失敗しました。もう一度お試しください。", "#ff4d6d");
+    } finally {
+      setAdding(false);
     }
-    setTimeout(() => setStatus(null), 4000);
+  }
+
+  async function deleteAlert(id) {
+    try {
+      await fetch(`/api/alerts?id=${id}`, { method: "DELETE" });
+      setAlerts(prev => prev.filter(a => a.id !== id));
+    } catch {
+      showStatus("削除に失敗しました", "#ff4d6d");
+    }
   }
 
   async function checkNow() {
-    if (alerts.length === 0) return setStatus({ msg: "アラートが設定されていません", color: "#ffd700" });
+    if (alerts.length === 0) return showStatus("アラートが設定されていません", "#ffd700");
     setChecking(true);
     try {
-      const r = await fetch("/api/check-alerts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ alerts }),
-      });
+      const r = await fetch("/api/check-alerts");
       const { triggered } = await r.json();
       if (triggered.length > 0) {
         const names = triggered.map(t => t.ticker).join(", ");
-        setStatus({ msg: `${names} が目標に到達！メールを送信しました。`, color: "#00e5a0" });
-        const triggeredIds = new Set(triggered.map(t => t.id));
-        saveAlerts(alerts.filter(a => !triggeredIds.has(a.id)));
+        showStatus(`${names} が目標に到達！メールを送信しました。`, "#00e5a0");
+        await loadAlerts();
       } else {
-        setStatus({ msg: "現在、目標に達した銘柄はありません", color: "#00c9ff" });
+        showStatus("現在、目標に達した銘柄はありません", "#00c9ff");
       }
     } catch {
-      setStatus({ msg: "チェック中にエラーが発生しました", color: "#ff4d6d" });
+      showStatus("チェック中にエラーが発生しました", "#ff4d6d");
+    } finally {
+      setChecking(false);
     }
-    setChecking(false);
-    setTimeout(() => setStatus(null), 4000);
   }
 
-  useEffect(() => {
-    if (alerts.length > 0) checkNow();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const card = { background: "#080f1a", border: "1px solid #0d2030", borderRadius: 12, padding: 16, marginBottom: 12 };
+  const card  = { background: "#080f1a", border: "1px solid #0d2030", borderRadius: 12, padding: 16, marginBottom: 12 };
   const input = { width: "100%", padding: "10px 12px", background: "#04090f", border: "1px solid #0d2030", borderRadius: 8, color: "#eaf4ff", fontFamily: "inherit", fontSize: 14, outline: "none" };
-  const label = { fontSize: 11, color: "#4a7090", marginBottom: 4, display: "block" };
+  const lbl   = { fontSize: 11, color: "#4a7090", marginBottom: 4, display: "block" };
 
   return (
     <div style={{ padding: "16px 16px 100px" }}>
@@ -2481,30 +2497,30 @@ function AlertTab() {
 
       {/* Email */}
       <div style={card}>
-        <label style={label}>通知メールアドレス</label>
+        <label style={lbl}>通知メールアドレス</label>
         <input style={input} type="email" placeholder="example@email.com" value={email}
           onChange={e => { setEmail(e.target.value); localStorage.setItem("kabuai_alert_email", e.target.value); }} />
       </div>
 
-      {/* Add alert form */}
+      {/* Add form */}
       <div style={card}>
         <div style={{ fontSize: 12, color: "#00c9ff", fontWeight: 700, marginBottom: 12 }}>新しいアラートを追加</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
           <div>
-            <label style={label}>銘柄ティッカー</label>
+            <label style={lbl}>銘柄ティッカー</label>
             <input style={input} placeholder="NVDA" value={ticker}
               onChange={e => setTicker(e.target.value.toUpperCase())}
               onKeyDown={e => e.key === "Enter" && addAlert()} />
           </div>
           <div>
-            <label style={label}>目標株価 (USD)</label>
+            <label style={lbl}>目標株価 (USD)</label>
             <input style={input} type="number" placeholder="1000" value={targetPrice}
               onChange={e => setTargetPrice(e.target.value)}
               onKeyDown={e => e.key === "Enter" && addAlert()} />
           </div>
         </div>
         <div style={{ marginBottom: 12 }}>
-          <label style={label}>アラート条件</label>
+          <label style={lbl}>アラート条件</label>
           <div style={{ display: "flex", gap: 8 }}>
             {[{ v: "above", label: "📈 以上になったら" }, { v: "below", label: "📉 以下になったら" }].map(d => (
               <button key={d.v} onClick={() => setDirection(d.v)}
@@ -2514,9 +2530,9 @@ function AlertTab() {
             ))}
           </div>
         </div>
-        <button onClick={addAlert}
-          style={{ width: "100%", padding: "12px 0", background: "linear-gradient(135deg,#00c9ff22,#00e5a022)", border: "1px solid #00c9ff55", borderRadius: 8, color: "#00c9ff", cursor: "pointer", fontFamily: "inherit", fontSize: 14, fontWeight: 700 }}>
-          + アラートを追加
+        <button onClick={addAlert} disabled={adding}
+          style={{ width: "100%", padding: "12px 0", background: "linear-gradient(135deg,#00c9ff22,#00e5a022)", border: "1px solid #00c9ff55", borderRadius: 8, color: "#00c9ff", cursor: "pointer", fontFamily: "inherit", fontSize: 14, fontWeight: 700, opacity: adding ? 0.6 : 1 }}>
+          {adding ? "登録中..." : "+ アラートを追加"}
         </button>
       </div>
 
@@ -2528,32 +2544,36 @@ function AlertTab() {
       )}
 
       {/* Alert list */}
-      {alerts.length > 0 && (
-        <div style={card}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <span style={{ fontSize: 12, color: "#00c9ff", fontWeight: 700 }}>設定中のアラート ({alerts.length}件)</span>
-            <button onClick={checkNow} disabled={checking}
-              style={{ padding: "6px 12px", background: "#00c9ff18", border: "1px solid #00c9ff55", borderRadius: 6, color: "#00c9ff", cursor: "pointer", fontFamily: "inherit", fontSize: 11, fontWeight: 700 }}>
-              {checking ? "チェック中..." : "🔄 今すぐチェック"}
-            </button>
-          </div>
-          {alerts.map(a => (
-            <div key={a.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #0d2030" }}>
-              <div>
-                <span style={{ fontWeight: 700, color: "#eaf4ff", marginRight: 8 }}>{a.ticker}</span>
-                <span style={{ fontSize: 12, color: "#4a7090" }}>
-                  {a.direction === "above" ? "📈" : "📉"} ${a.targetPrice} {a.direction === "above" ? "以上" : "以下"}
-                </span>
-              </div>
-              <button onClick={() => saveAlerts(alerts.filter(x => x.id !== a.id))}
-                style={{ background: "none", border: "none", color: "#2a4560", cursor: "pointer", fontSize: 16, padding: "0 4px" }}>×</button>
+      {loading
+        ? <div style={{ textAlign: "center", color: "#2a4560", fontSize: 13, padding: 24 }}>読み込み中...</div>
+        : alerts.length > 0 && (
+          <div style={card}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <span style={{ fontSize: 12, color: "#00c9ff", fontWeight: 700 }}>設定中のアラート ({alerts.length}件)</span>
+              <button onClick={checkNow} disabled={checking}
+                style={{ padding: "6px 12px", background: "#00c9ff18", border: "1px solid #00c9ff55", borderRadius: 6, color: "#00c9ff", cursor: "pointer", fontFamily: "inherit", fontSize: 11, fontWeight: 700 }}>
+                {checking ? "チェック中..." : "🔄 今すぐチェック"}
+              </button>
             </div>
-          ))}
-        </div>
-      )}
+            {alerts.map((a, i) => (
+              <div key={a.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: i < alerts.length - 1 ? "1px solid #0d2030" : "none" }}>
+                <div>
+                  <span style={{ fontWeight: 700, color: "#eaf4ff", marginRight: 8 }}>{a.ticker}</span>
+                  <span style={{ fontSize: 12, color: "#4a7090" }}>
+                    {a.direction === "above" ? "📈" : "📉"} ${a.targetPrice} {a.direction === "above" ? "以上" : "以下"}
+                  </span>
+                  <div style={{ fontSize: 10, color: "#1a3040", marginTop: 2 }}>{a.email}</div>
+                </div>
+                <button onClick={() => deleteAlert(a.id)}
+                  style={{ background: "none", border: "none", color: "#2a4560", cursor: "pointer", fontSize: 18, padding: "0 4px", lineHeight: 1 }}>×</button>
+              </div>
+            ))}
+          </div>
+        )
+      }
 
       <div style={{ fontSize: 11, color: "#2a4560", textAlign: "center", marginTop: 8 }}>
-        ※ アラートはアプリ起動時と毎時自動チェックされます
+        ※ アラートはVercel Blob に保存され、毎時サーバー側で自動チェックされます
       </div>
     </div>
   );

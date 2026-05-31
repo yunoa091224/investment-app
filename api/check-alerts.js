@@ -1,13 +1,34 @@
+import { put, list } from '@vercel/blob';
 import { Resend } from 'resend';
 
-async function fetchPrice(ticker) {
+const BLOB_PATH = 'kabuai-alerts/data.json';
+
+async function readAlerts() {
+  const { blobs } = await list({ prefix: 'kabuai-alerts/' });
+  if (blobs.length === 0) return [];
   try {
-    const r = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`,
-      { headers: { 'User-Agent': 'Mozilla/5.0' } }
-    );
+    const r = await fetch(blobs[0].url);
+    return await r.json();
+  } catch {
+    return [];
+  }
+}
+
+async function writeAlerts(alerts) {
+  await put(BLOB_PATH, JSON.stringify(alerts), {
+    access: 'public',
+    addRandomSuffix: false,
+    contentType: 'application/json',
+  });
+}
+
+async function fetchPrice(ticker) {
+  const key = process.env.VITE_FINNHUB_KEY;
+  if (!key) return null;
+  try {
+    const r = await fetch(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${key}`);
     const data = await r.json();
-    return data.chart?.result?.[0]?.meta?.regularMarketPrice ?? null;
+    return typeof data.c === 'number' && data.c > 0 ? data.c : null;
   } catch {
     return null;
   }
@@ -20,31 +41,35 @@ function buildEmailHtml(ticker, currentPrice, targetPrice, direction) {
     <div style="font-family:sans-serif;max-width:480px;margin:0 auto;background:#060e18;color:#eaf4ff;padding:32px;border-radius:12px">
       <h2 style="color:#00e5a0;margin-top:0">${arrow} 目標株価に到達しました</h2>
       <table style="width:100%;border-collapse:collapse">
-        <tr><td style="color:#4a7090;padding:8px 0">銘柄</td><td style="font-weight:700">${ticker}</td></tr>
-        <tr><td style="color:#4a7090;padding:8px 0">現在価格</td><td style="font-weight:700;color:#00e5a0">$${currentPrice.toFixed(2)}</td></tr>
-        <tr><td style="color:#4a7090;padding:8px 0">目標価格</td><td style="font-weight:700">$${targetPrice} ${dirLabel}</td></tr>
+        <tr><td style="color:#4a7090;padding:8px 0;width:120px">銘柄</td><td style="font-weight:700">${ticker}</td></tr>
+        <tr><td style="color:#4a7090;padding:8px 0">現在株価</td><td style="font-weight:700;color:#00e5a0">$${currentPrice.toFixed(2)}</td></tr>
+        <tr><td style="color:#4a7090;padding:8px 0">目標株価</td><td style="font-weight:700">$${targetPrice} ${dirLabel}</td></tr>
       </table>
       <p style="margin-top:24px">Kabu.AI で詳細を確認し、投資判断を行ってください。</p>
-      <p style="color:#2a4560;font-size:11px">※ 本メールはKabu.AIからの自動送信です。投資判断はご自身の責任で行ってください。</p>
+      <p style="color:#2a4560;font-size:11px;margin-top:16px">※ 本メールはKabu.AIからの自動送信です。投資判断はご自身の責任で行ってください。</p>
     </div>
   `;
 }
 
+// Vercel Cron はGETリクエストで呼び出す
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { alerts } = req.body;
-  if (!Array.isArray(alerts) || alerts.length === 0) return res.json({ triggered: [] });
+  const alerts = await readAlerts();
+  if (alerts.length === 0) return res.json({ triggered: [], checked: 0 });
 
   const resend = new Resend(process.env.RESEND_API_KEY);
   const triggered = [];
+  const remaining = [];
 
   for (const alert of alerts) {
     const { id, ticker, targetPrice, email, direction } = alert;
-    if (!ticker || !targetPrice || !email) continue;
-
     const currentPrice = await fetchPrice(ticker);
-    if (currentPrice === null) continue;
+
+    if (currentPrice === null) {
+      remaining.push(alert);
+      continue;
+    }
 
     const hit = direction === 'above'
       ? currentPrice >= Number(targetPrice)
@@ -55,15 +80,21 @@ export default async function handler(req, res) {
         await resend.emails.send({
           from: 'Kabu.AI <onboarding@resend.dev>',
           to: email,
-          subject: `${direction === 'above' ? '📈' : '📉'} ${ticker} が目標株価に到達しました`,
+          subject: `【Kabu.AI】${ticker}が目標株価に達しました`,
           html: buildEmailHtml(ticker, currentPrice, targetPrice, direction),
         });
         triggered.push({ id, ticker, currentPrice, targetPrice });
       } catch {
-        // continue processing remaining alerts even if one email fails
+        remaining.push(alert);
       }
+    } else {
+      remaining.push(alert);
     }
   }
 
-  return res.json({ triggered });
+  if (triggered.length > 0) {
+    await writeAlerts(remaining);
+  }
+
+  return res.json({ triggered, checked: alerts.length });
 }
