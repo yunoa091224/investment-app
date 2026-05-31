@@ -107,19 +107,46 @@ function safeParseJSON(text) {
   }
 }
 
-async function callDifyAnalysis(ticker) {
+async function callDifyWorkflow(apiKey, inputs) {
   const res = await fetch("https://api.dify.ai/v1/workflows/run", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${import.meta.env.VITE_DIFY_API_KEY}`,
+      "Authorization": `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({ inputs: { ticker }, response_mode: "blocking", user: "kabuai-user" }),
+    body: JSON.stringify({ inputs, response_mode: "blocking", user: "kabuai-user" }),
   });
   const json = await res.json();
-  const text = json.data?.outputs?.analysis;
-  if (!text) throw new Error("Dify分析結果なし");
-  return safeParseJSON(text);
+  if (!res.ok) throw new Error(json.message || `Dify APIエラー (${res.status})`);
+  return json.data?.outputs ?? {};
+}
+
+// 3段階分析: ファンダ → テクニカル → 総合
+async function callDifyAnalysis(ticker, onPhase) {
+  const FUND_KEY  = import.meta.env.VITE_DIFY_FUNDAMENTAL_KEY  || import.meta.env.VITE_DIFY_API_KEY;
+  const TECH_KEY  = import.meta.env.VITE_DIFY_TECHNICAL_KEY    || import.meta.env.VITE_DIFY_API_KEY;
+  const SYNTH_KEY = import.meta.env.VITE_DIFY_API_KEY;
+
+  // Step 1: ファンダメンタル分析
+  onPhase && onPhase(0);
+  const fundOutputs = await callDifyWorkflow(FUND_KEY, { ticker, step: "fundamental" });
+  const fundamental = fundOutputs.analysis || fundOutputs.fundamental || JSON.stringify(fundOutputs);
+
+  // Step 2: テクニカル分析
+  onPhase && onPhase(1);
+  const techOutputs = await callDifyWorkflow(TECH_KEY, { ticker, step: "technical", fundamental_result: fundamental });
+  const technical = techOutputs.analysis || techOutputs.technical || JSON.stringify(techOutputs);
+
+  // Step 3: 総合判断
+  onPhase && onPhase(2);
+  const synthOutputs = await callDifyWorkflow(SYNTH_KEY, { ticker, step: "synthesis", fundamental_result: fundamental, technical_result: technical });
+  const synthText = synthOutputs.analysis || synthOutputs.synthesis || JSON.stringify(synthOutputs);
+  if (!synthText) throw new Error("Dify総合分析結果なし");
+
+  const result = safeParseJSON(synthText);
+  // 各ステップの生データを付加（表示拡張用）
+  result._steps = { fundamental, technical };
+  return result;
 }
 
 async function callAPI(systemPrompt, userMessage) {
@@ -169,7 +196,7 @@ async function fetchFinnhubBatchPrices(symbols) {
       result[r.value.s] = { price: r.value.price, dp: r.value.dp };
     }
   }
-  console.log("[Finnhub] fetched quotes:", result, `(${Object.keys(result).length}/${symbols.length}銘柄)`);
+
   return result;
 }
 
@@ -195,7 +222,7 @@ async function fetchRankingIndicators(symbols) {
       bbands: bbandsEntry?.upper_band != null ? bbandsEntry              : null,
     };
   }
-  console.log("[TwelveData] ranking indicators:", result);
+
   return result;
 }
 
@@ -312,7 +339,7 @@ function ForexProvider({ children }) {
     try {
       const res = await fetch(`https://api.twelvedata.com/price?symbol=USD/JPY&apikey=${KEY}`);
       const data = await res.json();
-      console.log("[TwelveData] forex response:", data);
+
       if (data.price && data.status !== "error" && !data.code) {
         setRate(parseFloat(data.price));
         setUpdatedAt(new Date());
@@ -898,14 +925,19 @@ function AnalysisTab({ initialTicker }) {
   const [error, setError] = useState(null);
   const [phase, setPhase] = useState(0);
   const phaseRef = useRef(null);
-  const phases = ["🔍 銘柄情報を取得中...","📊 テクニカル分析中...","🤖 売買戦略を策定中...","✅ レポート生成中..."];
+  const phases = [
+    "🔍 ファンダメンタル分析中...",
+    "📊 テクニカル分析中...",
+    "🤖 総合判断を生成中...",
+    "✅ レポート生成中...",
+  ];
   useEffect(()=>{if(initialTicker)doAnalyze(initialTicker);},[]);
   async function doAnalyze(t) {
     const target=(t||ticker).trim().toUpperCase(); if(!target)return;
     setLoading(true);setResult(null);setError(null);setPhase(0);
-    phaseRef.current=setInterval(()=>setPhase(i=>(i+1)%phases.length),800);
+    if (phaseRef.current) clearInterval(phaseRef.current);
     try{
-      const d=await callDifyAnalysis(target);
+      const d=await callDifyAnalysis(target, (step) => setPhase(step));
       try {
         const realPrice = await fetchFinnhubPrice(target);
         if (realPrice != null) { d.current_price = `$${realPrice.toFixed(2)}`; d._realPrice = true; }
@@ -913,7 +945,7 @@ function AnalysisTab({ initialTicker }) {
       setResult(d);
     }
     catch(e){setError(e.message);}
-    finally{clearInterval(phaseRef.current);setLoading(false);}
+    finally{setPhase(3);setLoading(false);}
   }
   const vs={"今すぐ買い":{color:"#00e5a0",bg:"#00e5a015",border:"#00e5a040"},"待て":{color:"#ffd700",bg:"#ffd70015",border:"#ffd70040"},"見送り":{color:"#ff4d6d",bg:"#ff4d6d15",border:"#ff4d6d40"}};
   return (
@@ -1039,7 +1071,7 @@ function PortfolioTab() {
     const summary=holdings.map(h=>`${h.ticker}:取得価格$${h.purchase_price}×${h.shares}株(${h.purchase_date||"日付不明"})`).join(", ");
     try{const r=await callAPI(PORTFOLIO_PROMPT,`以下のポートフォリオを診断してください: ${summary}。JSONのみ返してください。`);setDiagnosis(r);}
     catch(e){setError(e.message);}
-    finally{clearInterval(phaseRef.current);setLoading(false);}
+    finally{setPhase(3);setLoading(false);}
   }
   const vc={"買い増し":"#00e5a0","ホールド":"#00c9ff","売り推奨":"#ff4d6d"};
   const diagH=diagnosis?.holdings||[];
@@ -1139,7 +1171,7 @@ function MacroTab() {
     phaseRef.current=setInterval(()=>setPhase(i=>(i+1)%phases.length),900);
     try{const d=await callAPI(MACRO_PROMPT,"2026年5月末時点の米国市場マクロ環境を分析してください。JSONのみ返してください。");setResult(d);}
     catch(e){setError(e.message);}
-    finally{clearInterval(phaseRef.current);setLoading(false);}
+    finally{setPhase(3);setLoading(false);}
   }
   return (
     <div style={{ padding:"16px 16px 8px" }}>
@@ -1499,7 +1531,7 @@ function FundamentalTab() {
     phaseRef.current=setInterval(()=>setPhase(i=>(i+1)%phases.length),800);
     try{const d=await callAPI(FUNDAMENTAL_PROMPT,`${t}のファンダメンタル分析をしてください。JSONのみ返してください。`);setResult(d);}
     catch(e){setError(e.message);}
-    finally{clearInterval(phaseRef.current);setLoading(false);}
+    finally{setPhase(3);setLoading(false);}
   }
   const vc={"割安":"#00e5a0","適正":"#ffd700","割高":"#ff4d6d","優秀":"#00e5a0","良好":"#60d0a0","普通":"#ffd700","要改善":"#ff4d6d"};
   return (
