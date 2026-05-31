@@ -26,7 +26,7 @@ const PERIODS = [
 
 const RANKING_PROMPT = `あなたは世界トップクラスの株式アナリストです。現時点（2026年5月末）での投資推奨トップ10を作成してください。以下のJSON形式のみで回答（前置き・説明・マークダウン一切不要）:
 {"updated":"2026年5月28日","market_comment":"市場環境2〜3文","stocks":[{"rank":1,"ticker":"NVDA","company":"NVIDIA","sector":"半導体","country":"🇺🇸","current_price":"$950","target_price":"$1200","score":9.2,"momentum":9,"growth":9,"safety":7,"catalyst":"Blackwell需要","risk":"競合リスク","reason":"AI需要拡大","rating":"強気買い","entry_zone":"$920〜$940","take_profit1":"$1050","take_profit2":"$1150","stop_loss":"$880","sell_trigger":"決算ミス・RSI75超","risk_reward":"1:3.2"}]}
-stocksは10件。ratingは「強気買い」「買い」「積極買い」のいずれか。scoreは小数点1桁(1-10)。momentum/growth/safetyは整数(1-10)。current_priceはAI推定値（リアルタイムAPIで上書きされる）。upsideは含めない。take_profit1・take_profit2・stop_lossは価格のみ（%不要）。改行なしの1行JSONのみ。`;
+stocksは10件。ratingは「強気買い」「買い」「積極買い」のいずれか。scoreは小数点1桁(1-10)。momentum/growth/safetyは整数(1-10)。current_priceとtarget_priceはAI推定値（後工程でリアルタイム株価基準に自動再計算される）。target_priceは現在価格の+15〜+60%の範囲で設定し、ratingが「強気買い」なら+40〜60%・「積極買い」なら+30〜50%・「買い」なら+20〜40%とすること。数倍・数分の一といった非現実的な値は禁止。upsideは含めない。take_profit1・take_profit2・stop_lossは価格のみ（%不要）。改行なしの1行JSONのみ。`;
 
 const ANALYSIS_PROMPT = `あなたは世界トップクラスの株式アナリストです。指定銘柄を詳細分析し以下のJSON形式のみで回答（前置き・説明不要）:
 {"ticker":"NVDA","company":"NVIDIA Corporation","sector":"半導体","current_price":"$950","overall_score":82,"buy_rating":"今すぐ買い","entry_zone":"$920〜$945","stop_loss":"$885 -6.8%","take_profit1":"$1020 +7%","take_profit2":"$1100 +15%","take_profit3":"$1200 +26%","hold_period":"2〜4週間","risk_reward":"1:2.8","sell_triggers":["RSI75超え・過熱感","決算ガイダンス下方修正","中国規制強化"],"summary":"Blackwellチップ需要が想定超で...","pros":["AI需要急拡大","高い参入障壁"],"cons":["高バリュエーション","地政学リスク"]}
@@ -341,18 +341,25 @@ function mergeRealPrice(stock, quote, techData) {
   const reward  = tp2Price - p;
   const rrStr   = risk > 0 && reward > 0 ? `1:${(reward / risk).toFixed(1)}` : "1:1.0";
 
-  // upside = 前日比%（Finnhub dp）、未取得時は目標株価ベースにフォールバック
+  // 目標株価: リアルタイム株価 × ratingに応じた倍率で再計算
+  //   強気買い: +40〜60% → 中間値 +50%
+  //   積極買い: +30〜50% → 中間値 +40%
+  //   買い:     +20〜40% → 中間値 +30%
+  //   その他:   +10〜20% → 中間値 +15%
+  const targetMultipliers = { "強気買い": 1.50, "積極買い": 1.40, "買い": 1.30 };
+  const targetMult        = targetMultipliers[stock.rating] ?? 1.15;
+  const newTargetPrice    = Math.round(p * targetMult);
+  const targetUpsidePct   = ((newTargetPrice - p) / p * 100);
+
+  // upside = 前日比%（Finnhub dp）、未取得時は目標株価 upside にフォールバック
   const upsideStr = dp != null
     ? `${dp >= 0 ? "+" : ""}${dp.toFixed(2)}%`
-    : (() => {
-        const targetNum = parseFloat((stock.target_price || "0").replace(/[^0-9.]/g, ""));
-        const pct = targetNum ? ((targetNum - p) / p * 100) : null;
-        return pct !== null ? `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%` : stock.upside;
-      })();
+    : `+${targetUpsidePct.toFixed(1)}%`;
 
   return {
     ...stock,
     current_price: `$${p.toFixed(2)}`,
+    target_price:  `$${newTargetPrice}`,
     upside:        upsideStr,
     entry_zone:    `$${entryLow}〜$${entryHigh}`,
     stop_loss:     `$${stopPrice} ${fmt(stopPct)}`,
