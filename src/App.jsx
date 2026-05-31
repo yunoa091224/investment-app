@@ -470,6 +470,81 @@ function DisclaimerModal({ onAccept }) {
   );
 }
 
+// ── PremiumModal ─────────────────────────────────────────────
+const PLAN_INFO = {
+  light: { label:"ライトプラン", price:"¥980",  color:"#00c9ff", desc:"ランキング・分析・ポートフォリオ" },
+  pro:   { label:"プロプラン",   price:"¥2,980", color:"#ffd700", desc:"全機能無制限 + 優先サポート" },
+};
+function PremiumModal({ onClose }) {
+  const [loading, setLoading] = useState(null);
+  const [error, setError]     = useState(null);
+
+  async function handleCheckout(plan) {
+    setLoading(plan); setError(null);
+    try {
+      const res  = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan }),
+      });
+      const data = await res.json();
+      if (data.url) { window.location.href = data.url; }
+      else throw new Error(data.error || '決済セッション作成に失敗しました');
+    } catch(e) { setError(e.message); setLoading(null); }
+  }
+
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"#000000d8", zIndex:10000, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 16px" }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:"#09141e", border:"1px solid #1a3550", borderRadius:16, padding:"28px 20px", maxWidth:400, width:"100%", boxShadow:"0 24px 64px #000000cc" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20 }}>
+          <div>
+            <div style={{ fontSize:9, color:"#ffd700", letterSpacing:3, marginBottom:4, fontWeight:700 }}>PREMIUM PLANS</div>
+            <div style={{ fontSize:18, fontWeight:900, color:"#e8f4ff" }}>プレミアム登録</div>
+            <div style={{ fontSize:11, color:"#4a7090", marginTop:2 }}>Kabu.AI をフル活用する</div>
+          </div>
+          <button onClick={onClose} style={{ background:"#ffffff0d", border:"none", color:"#4a7090", fontSize:15, cursor:"pointer", width:30, height:30, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>✕</button>
+        </div>
+
+        {[
+          { plan:"light", features:["ランキング（10銘柄）","銘柄分析","ポートフォリオ管理","テクニカル分析"] },
+          { plan:"pro",   features:["ライトプランの全機能","マクロ経済分析","決算・インサイダー分析","リスク分析・シナリオ","優先サポート"], popular:true },
+        ].map(({ plan, features, popular }) => {
+          const info = PLAN_INFO[plan];
+          return (
+            <div key={plan} style={{ background:"#06111a", border:`2px solid ${popular?"#ffd70033":"#0d2535"}`, borderRadius:12, padding:16, marginBottom:12, position:"relative" }}>
+              {popular && <div style={{ position:"absolute", top:-10, right:16, background:"#ffd700", color:"#000", fontSize:9, fontWeight:900, padding:"2px 10px", borderRadius:10, letterSpacing:2 }}>POPULAR</div>}
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
+                <div>
+                  <div style={{ fontSize:14, fontWeight:800, color:"#e8f4ff", marginBottom:2 }}>{info.label}</div>
+                  <div style={{ fontSize:10, color:"#4a7090" }}>{info.desc}</div>
+                </div>
+                <div style={{ textAlign:"right", flexShrink:0, marginLeft:12 }}>
+                  <div style={{ fontSize:22, fontWeight:900, color:info.color, lineHeight:1 }}>{info.price}</div>
+                  <div style={{ fontSize:9, color:"#4a7090" }}>/月（税込）</div>
+                </div>
+              </div>
+              <div style={{ marginBottom:12 }}>
+                {features.map((f,i) => (
+                  <div key={i} style={{ fontSize:11, color:"#6090a8", marginBottom:3 }}>✓ {f}</div>
+                ))}
+              </div>
+              <button onClick={() => handleCheckout(plan)} disabled={loading !== null}
+                style={{ width:"100%", padding:"11px", background:loading===plan?"#0d2535":`${info.color}18`, border:`1px solid ${loading===plan?"#0d2535":info.color+"44"}`, borderRadius:8, color:loading===plan?"#4a7090":info.color, cursor:loading!==null?"not-allowed":"pointer", fontFamily:"inherit", fontSize:13, fontWeight:700 }}>
+                {loading===plan ? "処理中..." : `${info.label}に登録する →`}
+              </button>
+            </div>
+          );
+        })}
+
+        {error && <div style={{ padding:"8px 12px", background:"#ff4d6d15", border:"1px solid #ff4d6d40", borderRadius:8, color:"#ff4d6d", fontSize:12, marginBottom:10 }}>⚠ {error}</div>}
+        <div style={{ fontSize:10, color:"#2a4560", textAlign:"center", lineHeight:1.7 }}>
+          🔒 Stripeによる安全な決済 · いつでも解約可能 · 自動更新
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── AnalysisBasis ─────────────────────────────────────────────
 function AnalysisBasis({ type, result, realData }) {
   const [open, setOpen] = useState(false);
@@ -2054,16 +2129,46 @@ const TABS = [
 
 // ── Main App ──────────────────────────────────────────────────
 export default function App() {
-  const [activeTab, setActiveTab] = useState("ranking");
+  const [activeTab, setActiveTab]       = useState("ranking");
   const [analysisTicker, setAnalysisTicker] = useState("");
   const [showDisclaimer, setShowDisclaimer] = useState(() => !localStorage.getItem("kabuai_disclaimer_v1"));
+  const [showPremium, setShowPremium]   = useState(false);
+  const [toast, setToast]               = useState(null); // { msg, color }
+
   function jumpToAnalysis(ticker){ setAnalysisTicker(ticker); setActiveTab("analysis"); }
   function acceptDisclaimer(){ localStorage.setItem("kabuai_disclaimer_v1","1"); setShowDisclaimer(false); }
+
+  // 決済リダイレクト後の URL パラメータ処理
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get("success") === "1") {
+      const plan = p.get("plan") || "pro";
+      localStorage.setItem("kabuai_plan", plan);
+      setToast({ msg:`🎉 ${PLAN_INFO[plan]?.label ?? "プレミアム"}への登録が完了しました！`, color:"#00e5a0" });
+      window.history.replaceState({}, "", "/");
+    } else if (p.get("canceled") === "1") {
+      setToast({ msg:"決済がキャンセルされました", color:"#ffd700" });
+      window.history.replaceState({}, "", "/");
+    }
+  }, []);
+
+  // トースト自動消去
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(t);
+  }, [toast]);
   return (
     <ErrorBoundary>
       <ForexProvider>
       <div style={{ minHeight:"100vh", background:"#04090f", fontFamily:"'Courier New', monospace", color:"#c8d8e8", paddingBottom:72 }}>
         {showDisclaimer && <DisclaimerModal onAccept={acceptDisclaimer}/>}
+        {showPremium   && <PremiumModal onClose={() => setShowPremium(false)}/>}
+        {toast && (
+          <div style={{ position:"fixed", top:16, left:"50%", transform:"translateX(-50%)", zIndex:9998, padding:"12px 20px", background:"#09141e", border:`1px solid ${toast.color}55`, borderRadius:12, color:toast.color, fontSize:13, fontWeight:700, boxShadow:"0 8px 32px #000000aa", whiteSpace:"nowrap", maxWidth:"90vw", textOverflow:"ellipsis", overflow:"hidden" }}>
+            {toast.msg}
+          </div>
+        )}
         <style>{`
           @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
           @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
@@ -2075,9 +2180,17 @@ export default function App() {
         `}</style>
         <div style={{ background:"linear-gradient(180deg,#060e18,#04090f)", borderBottom:"1px solid #0d2030", padding:"20px 16px 16px" }}>
           <div style={{ maxWidth:680, margin:"0 auto" }}>
-            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
-              <span style={{ width:7, height:7, borderRadius:"50%", background:"#00e5a0", display:"inline-block", animation:"pulse 1.5s infinite" }}/>
-              <span style={{ fontSize:9, letterSpacing:4, color:"#00e5a0" }}>AI INVESTMENT INTELLIGENCE · LIVE</span>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                <span style={{ width:7, height:7, borderRadius:"50%", background:"#00e5a0", display:"inline-block", animation:"pulse 1.5s infinite" }}/>
+                <span style={{ fontSize:9, letterSpacing:4, color:"#00e5a0" }}>AI INVESTMENT INTELLIGENCE · LIVE</span>
+              </div>
+              <button onClick={() => setShowPremium(true)}
+                style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"6px 12px", background:"linear-gradient(135deg,#ffd70022,#ff990022)", border:"1px solid #ffd70055", borderRadius:20, color:"#ffd700", cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:700, flexShrink:0 }}>
+                {localStorage.getItem("kabuai_plan")
+                  ? `★ ${PLAN_INFO[localStorage.getItem("kabuai_plan")]?.label ?? "Premium"}`
+                  : "⚡ プレミアム登録"}
+              </button>
             </div>
             <h1 style={{ margin:0, fontSize:"clamp(22px,5vw,32px)", fontWeight:900, color:"#eaf4ff", letterSpacing:-1 }}>
               Kabu<span style={{ color:"#00e5a0" }}>.AI</span>
