@@ -589,6 +589,28 @@ function InfoBtn({ id }) {
   );
 }
 
+// ── X Share ───────────────────────────────────────────────────
+const APP_URL = "https://investment-app-zeta-six.vercel.app";
+function shareToX(text) {
+  const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+function XShareBtn({ text, style }) {
+  return (
+    <button
+      onClick={e => { e.stopPropagation(); shareToX(text); }}
+      style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"7px 14px",
+        background:"#000000", border:"1px solid #333", borderRadius:8,
+        color:"#ffffff", cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:700,
+        ...style }}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="white">
+        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.253 5.622 5.912-5.622Zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+      </svg>
+      Xでシェア
+    </button>
+  );
+}
+
 // ── StockCard ─────────────────────────────────────────────────
 function StockCard({ stock, color, expanded, onToggle }) {
   const rc = { "強気買い":"#00e5a0","買い":"#60d0a0","積極買い":"#40c4ff" }[stock.rating]||"#00e5a0";
@@ -691,6 +713,16 @@ function StockCard({ stock, color, expanded, onToggle }) {
                   <div style={{ fontSize:14, color:"#c0a0f0", fontWeight:900 }}>{stock.risk_reward}</div>
                 </div>
               </div>
+            </div>
+            <div style={{ display:"flex", justifyContent:"flex-end", marginTop:8 }}>
+              <XShareBtn text={
+`📊 #${stock.ticker} を Kabu.AI で分析
+現在値: ${stock.current_price}　前日比: ${stock.upside || "—"}
+AIスコア: ${stock.score}/10　推奨: ${stock.rating}
+買いゾーン: ${stock.entry_zone}　損切り: ${stock.stop_loss}
+#投資 #米国株 #NISA
+${APP_URL}`
+              }/>
             </div>
           )}
         </div>
@@ -875,6 +907,16 @@ function AnalysisTab({ initialTicker }) {
             <div style={{ background:"#060e17", border:"1px solid #0d2030", borderRadius:8, padding:"10px 12px" }}>
               <div style={{ fontSize:9, color:"#00c9ff", letterSpacing:2, marginBottom:4 }}>▶ 総合サマリー</div>
               <div style={{ fontSize:12, color:"#8ab0c8", lineHeight:1.7 }}>{result.summary}</div>
+            </div>
+            <div style={{ display:"flex", justifyContent:"flex-end", marginTop:10 }}>
+              <XShareBtn text={
+`📊 #${result.ticker} を Kabu.AI で分析
+現在値: ${result.current_price}
+買い推奨度: ${result.overall_score}/100　判定: ${result.buy_rating}
+エントリー: ${result.entry_zone}　損切り: ${result.stop_loss}
+#投資 #米国株 #NISA
+${APP_URL}`
+              }/>
             </div>
             <AnalysisBasis type="analysis" result={result}/>
             <Disclaimer/>
