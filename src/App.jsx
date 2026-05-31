@@ -107,6 +107,21 @@ function safeParseJSON(text) {
   }
 }
 
+async function callDifyAnalysis(ticker) {
+  const res = await fetch("https://api.dify.ai/v1/workflows/run", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${import.meta.env.VITE_DIFY_API_KEY}`,
+    },
+    body: JSON.stringify({ inputs: { ticker }, response_mode: "blocking", user: "kabuai-user" }),
+  });
+  const json = await res.json();
+  const text = json.data?.outputs?.analysis;
+  if (!text) throw new Error("Dify分析結果なし");
+  return safeParseJSON(text);
+}
+
 async function callAPI(systemPrompt, userMessage) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method:"POST",
@@ -890,7 +905,7 @@ function AnalysisTab({ initialTicker }) {
     setLoading(true);setResult(null);setError(null);setPhase(0);
     phaseRef.current=setInterval(()=>setPhase(i=>(i+1)%phases.length),800);
     try{
-      const d=await callAPI(ANALYSIS_PROMPT,`${target}を詳細分析してください。JSONのみ返してください。`);
+      const d=await callDifyAnalysis(target);
       try {
         const realPrice = await fetchFinnhubPrice(target);
         if (realPrice != null) { d.current_price = `$${realPrice.toFixed(2)}`; d._realPrice = true; }
