@@ -119,6 +119,20 @@ const EARNINGS_PROMPT = `あなたは世界トップクラスの株式アナリ�
 {"ticker":"NVDA","next_earnings":"2026-08-20（推定）","past_surprises":[{"quarter":"Q1 2026","eps_estimate":"$5.89","eps_actual":"$6.12","surprise_rate":"+3.9%"},{"quarter":"Q4 2025","eps_estimate":"$4.44","eps_actual":"$4.93","surprise_rate":"+11.0%"},{"quarter":"Q3 2025","eps_estimate":"$0.74","eps_actual":"$0.81","surprise_rate":"+9.5%"},{"quarter":"Q2 2025","eps_estimate":"$0.60","eps_actual":"$0.68","surprise_rate":"+13.3%"}],"surprise_prediction":"強気","price_reaction":"上昇","trade_recommendation":"決算前に買う","surprise_score":84}
 past_surprisesは直近4四半期分。surprise_predictionは「強気」「弱気」「中立」のいずれか。price_reactionは「上昇」「下落」「横ばい」のいずれか。trade_recommendationは「決算前に買う」「決算前に売る」「様子見」のいずれか。surprise_scoreは0〜100の整数。改行なしの1行JSONのみ。`;
 
+// ── Design tokens ─────────────────────────────────────────────
+const C = {
+  bg:      "#0a0f1a",
+  card:    "#0d1b2a",
+  border:  "#1a2e40",
+  accent:  "#00c9ff",
+  success: "#00e5a0",
+  warning: "#ffd700",
+  danger:  "#ff4d6d",
+  text:    "#e8f4ff",
+  muted:   "#4a7090",
+  dim:     "#1a3050",
+};
+
 const PIE_COLORS = ["#00e5a0","#00c9ff","#a78bfa","#ff6b35","#ffd700","#ff4d6d","#60d0a0","#f0a0ff"];
 function buildPieGradient(sectors) {
   let cum = 0;
@@ -1471,50 +1485,111 @@ function TechnicalTab() {
               </div>
             </div>
           )}
-          {/* Score */}
-          <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"14px 16px", marginBottom:10 }}>
+          {/* ── シグナル信号機パネル ── */}
+          {(() => {
+            const rsiV = parseFloat(result.rsi?.value || 50);
+            const signals = [
+              {
+                label:"RSI",
+                icon: rsiV <= 30 ? "🟢" : rsiV >= 70 ? "🔴" : "🟡",
+                color: rsiV <= 30 ? C.success : rsiV >= 70 ? C.danger : C.warning,
+                text: rsiV <= 30 ? "売られすぎ" : rsiV >= 70 ? "買われすぎ" : "中立",
+                sub: `${result.rsi?.value ?? "—"}`,
+              },
+              {
+                label:"MACD",
+                icon: result.macd?.signal === "買い" ? "🟢" : result.macd?.signal === "売り" ? "🔴" : "🟡",
+                color: result.macd?.signal === "買い" ? C.success : result.macd?.signal === "売り" ? C.danger : C.warning,
+                text: result.macd?.signal ?? "—",
+                sub: null,
+              },
+              {
+                label:"移動平均",
+                icon: result.ma_cross?.status === "ゴールデン" ? "🟢" : result.ma_cross?.status === "デッド" ? "🔴" : "🟡",
+                color: result.ma_cross?.status === "ゴールデン" ? C.success : result.ma_cross?.status === "デッド" ? C.danger : C.warning,
+                text: result.ma_cross?.status ?? "—",
+                sub: null,
+              },
+              {
+                label:"BB位置",
+                icon: result.bollinger?.position === "下限" ? "🟢" : result.bollinger?.position === "上限" ? "🔴" : "🟡",
+                color: result.bollinger?.position === "下限" ? C.success : result.bollinger?.position === "上限" ? C.danger : C.warning,
+                text: result.bollinger?.position ?? "—",
+                sub: null,
+              },
+            ];
+            return (
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6, marginBottom:12 }}>
+                {signals.map(({label,icon,color,text,sub}) => (
+                  <div key={label} style={{ textAlign:"center", background:C.card, border:`1px solid ${color}44`, borderRadius:10, padding:"10px 4px", boxShadow:`0 0 10px ${color}18` }}>
+                    <div style={{ fontSize:22, marginBottom:4, lineHeight:1 }}>{icon}</div>
+                    <div style={{ fontSize:9, color:C.muted, marginBottom:2 }}>{label}</div>
+                    <div style={{ fontSize:10, color, fontWeight:700, lineHeight:1.3 }}>{text}</div>
+                    {sub && <div style={{ fontSize:12, color, fontWeight:900 }}>{sub}</div>}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
+          {/* ── 総合スコア ── */}
+          <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:"14px 16px", marginBottom:10, boxShadow:"0 2px 12px #00000040" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:"#4a7090" }}>総合テクニカルスコア</span><InfoBtn id="tech_score"/></div>
-              <span style={{ fontSize:22, fontWeight:900, color:result.tech_score>=70?"#00e5a0":result.tech_score>=40?"#ffd700":"#ff4d6d" }}>{result.tech_score}<span style={{ fontSize:11 }}>/100</span></span>
+              <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:C.muted }}>総合テクニカルスコア</span><InfoBtn id="tech_score"/></div>
+              <span style={{ fontSize:26, fontWeight:900, color:result.tech_score>=70?C.success:result.tech_score>=40?C.warning:C.danger }}>{result.tech_score}<span style={{ fontSize:12, color:C.muted }}>/100</span></span>
             </div>
-            <ScoreBar value={result.tech_score} color={result.tech_score>=70?"#00e5a0":result.tech_score>=40?"#ffd700":"#ff4d6d"}/>
+            <ScoreBar value={result.tech_score} color={result.tech_score>=70?C.success:result.tech_score>=40?C.warning:C.danger}/>
           </div>
-          {/* RSI */}
-          <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"12px 14px", marginBottom:8 }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:"#4a7090" }}>RSI (14日)</span><InfoBtn id="rsi"/></div>
+
+          {/* ── RSI ゲージ ── */}
+          <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:"14px 16px", marginBottom:8, boxShadow:"0 2px 12px #00000040" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:C.muted }}>RSI (14日)</span><InfoBtn id="rsi"/></div>
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                <span style={{ fontSize:18, fontWeight:900, color:sigC[result.rsi?.signal]||"#ffd700" }}>{result.rsi?.value}</span>
-                <span style={{ fontSize:10, padding:"2px 8px", background:`${sigC[result.rsi?.signal]||"#ffd700"}22`, color:sigC[result.rsi?.signal]||"#ffd700", borderRadius:8 }}>{result.rsi?.signal}</span>
+                <span style={{ fontSize:24, fontWeight:900, color:sigC[result.rsi?.signal]||C.warning }}>{result.rsi?.value}</span>
+                <span style={{ fontSize:10, padding:"3px 10px", background:`${sigC[result.rsi?.signal]||C.warning}22`, color:sigC[result.rsi?.signal]||C.warning, borderRadius:10, border:`1px solid ${sigC[result.rsi?.signal]||C.warning}44` }}>{result.rsi?.signal}</span>
               </div>
             </div>
-            <div style={{ position:"relative", height:8, background:"linear-gradient(90deg,#00e5a0 0%,#ffd700 30%,#ffd700 70%,#ff4d6d 100%)", borderRadius:4, marginBottom:6 }}>
-              <div style={{ position:"absolute", top:-2, left:`${Math.min(99,Math.max(1,result.rsi?.value||50))}%`, width:12, height:12, borderRadius:"50%", background:"#fff", border:"2px solid #060e17", transform:"translateX(-50%)" }}/>
+            <div style={{ position:"relative", height:10, background:`linear-gradient(90deg,${C.success} 0%,${C.warning} 30%,${C.warning} 70%,${C.danger} 100%)`, borderRadius:5, marginBottom:8 }}>
+              <div style={{ position:"absolute", top:-3, left:`${Math.min(99,Math.max(1,result.rsi?.value||50))}%`, width:16, height:16, borderRadius:"50%", background:"#fff", border:`3px solid ${C.bg}`, transform:"translateX(-50%)", boxShadow:`0 0 8px ${sigC[result.rsi?.signal]||C.warning}` }}/>
             </div>
-            <div style={{ display:"flex", justifyContent:"space-between", fontSize:9, color:"#4a7090", marginBottom:6 }}><span>0 底値</span><span>30</span><span>70</span><span>100 過熱</span></div>
-            <div style={{ fontSize:11, color:"#6090a8", lineHeight:1.5 }}>{result.rsi?.comment}</div>
+            <div style={{ display:"flex", justifyContent:"space-between", fontSize:9, color:C.muted, marginBottom:8 }}>
+              <span style={{ color:C.success }}>0 売られすぎ</span><span>30</span><span>50</span><span>70</span><span style={{ color:C.danger }}>100 買われすぎ</span>
+            </div>
+            <div style={{ fontSize:11, color:"#6090a8", lineHeight:1.6 }}>{result.rsi?.comment}</div>
           </div>
-          {/* MACD + MA Cross */}
+
+          {/* ── MACD + MA クロス ── */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
-            {[{label:"MACD",infoId:"macd",signal:result.macd?.signal,comment:result.macd?.comment},{label:"移動平均クロス",infoId:"ma_cross",signal:result.ma_cross?.status,comment:result.ma_cross?.comment}].map(({label,infoId,signal,comment})=>(
-              <div key={label} style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"12px 14px" }}>
-                <div style={{ fontSize:9, color:"#4a7090", letterSpacing:2, marginBottom:8, display:"flex", alignItems:"center", gap:4 }}>{label}<InfoBtn id={infoId}/></div>
-                <div style={{ fontSize:14, fontWeight:900, color:sigC[signal]||"#ffd700", marginBottom:6 }}>{signal}</div>
-                <div style={{ fontSize:10, color:"#507090", lineHeight:1.5 }}>{comment}</div>
-              </div>
-            ))}
+            {[
+              {label:"MACD",infoId:"macd",signal:result.macd?.signal,comment:result.macd?.comment},
+              {label:"移動平均クロス",infoId:"ma_cross",signal:result.ma_cross?.status,comment:result.ma_cross?.comment}
+            ].map(({label,infoId,signal,comment}) => {
+              const sc = sigC[signal] || C.warning;
+              return (
+                <div key={label} style={{ background:C.card, border:`1px solid ${sc}33`, borderRadius:12, padding:"12px 14px", boxShadow:"0 2px 12px #00000040" }}>
+                  <div style={{ fontSize:9, color:C.muted, letterSpacing:2, marginBottom:8, display:"flex", alignItems:"center", gap:4 }}>{label}<InfoBtn id={infoId}/></div>
+                  <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:8 }}>
+                    <div style={{ width:10, height:10, borderRadius:"50%", background:sc, boxShadow:`0 0 6px ${sc}` }}/>
+                    <div style={{ fontSize:15, fontWeight:900, color:sc }}>{signal}</div>
+                  </div>
+                  <div style={{ fontSize:10, color:"#507090", lineHeight:1.5 }}>{comment}</div>
+                </div>
+              );
+            })}
           </div>
-          {/* Bollinger */}
-          <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"12px 14px", marginBottom:8 }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:9, color:"#4a7090", letterSpacing:2 }}>ボリンジャーバンド</span><InfoBtn id="bollinger"/></div>
-              <span style={{ fontSize:10, padding:"2px 8px", background:"#00c9ff22", color:"#00c9ff", borderRadius:8 }}>{result.bollinger?.position}</span>
+
+          {/* ── ボリンジャーバンド ── */}
+          <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:"14px 16px", marginBottom:8, boxShadow:"0 2px 12px #00000040" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:10, color:C.muted, letterSpacing:2 }}>ボリンジャーバンド</span><InfoBtn id="bollinger"/></div>
+              <span style={{ fontSize:10, padding:"3px 10px", background:`${C.accent}22`, color:C.accent, borderRadius:10, border:`1px solid ${C.accent}44` }}>{result.bollinger?.position}</span>
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6 }}>
-              {[["上限",result.bollinger?.upper,"#ff4d6d"],["中心",result.bollinger?.middle,"#ffd700"],["下限",result.bollinger?.lower,"#00e5a0"]].map(([lbl,val,c])=>(
-                <div key={lbl} style={{ textAlign:"center", background:`${c}0d`, border:`1px solid ${c}20`, borderRadius:6, padding:"8px 6px" }}>
+              {[["▲ 上限",result.bollinger?.upper,C.danger],["● 中心",result.bollinger?.middle,C.warning],["▼ 下限",result.bollinger?.lower,C.success]].map(([lbl,val,c]) => (
+                <div key={lbl} style={{ textAlign:"center", background:`${c}0d`, border:`1px solid ${c}30`, borderRadius:8, padding:"10px 6px" }}>
                   <div style={{ fontSize:9, color:c, marginBottom:4 }}>{lbl}</div>
-                  <div style={{ fontSize:12, color:"#e8f4ff", fontWeight:700 }}>{val}</div>
+                  <div style={{ fontSize:13, color:C.text, fontWeight:700 }}>{val}</div>
                 </div>
               ))}
             </div>
@@ -1568,38 +1643,73 @@ function FundamentalTab() {
       {error&&<ErrBox msg={error}/>}
       {result&&!loading&&(
         <div style={{ animation:"fadeIn .3s ease" }}>
-          <div style={{ textAlign:"center", fontSize:18, fontWeight:900, color:"#e8f4ff", marginBottom:16 }}>{result.ticker} ファンダメンタル分析</div>
-          {/* PER/PBR/ROE */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:10 }}>
-            {[{label:"PER",infoId:"per",v:result.per?.value+"x",sig:result.per?.signal},{label:"PBR",infoId:"pbr",v:result.pbr?.value+"x",sig:result.pbr?.signal},{label:"ROE",infoId:"roe",v:result.roe?.value+"%",sig:result.roe?.signal}].map(({label,infoId,v,sig})=>(
-              <div key={label} style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"10px 12px", textAlign:"center" }}>
-                <div style={{ fontSize:9, color:"#4a7090", marginBottom:4, display:"flex", alignItems:"center", justifyContent:"center", gap:3 }}>{label}<InfoBtn id={infoId}/></div>
-                <div style={{ fontSize:16, fontWeight:900, color:"#e8f4ff", marginBottom:4 }}>{v}</div>
-                <div style={{ fontSize:10, padding:"2px 6px", background:`${vc[sig]||"#ffd700"}22`, color:vc[sig]||"#ffd700", borderRadius:6, display:"inline-block" }}>{sig}</div>
-              </div>
-            ))}
-          </div>
-          {/* Growth */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10 }}>
-            {[["売上成長率",result.revenue_growth],["利益成長率",result.profit_growth]].map(([lbl,val])=>(
-              <div key={lbl} style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:8, padding:"10px 12px", textAlign:"center" }}>
-                <div style={{ fontSize:9, color:"#4a7090", marginBottom:4 }}>{lbl}</div>
-                <div style={{ fontSize:20, fontWeight:900, color:String(val||"").startsWith("+")?"#00e5a0":String(val||"").startsWith("-")?"#ff4d6d":"#e8f4ff" }}>{val}</div>
-              </div>
-            ))}
-          </div>
-          {/* DCF */}
-          <div style={{ background:"#a78bfa10", border:"1px solid #a78bfa25", borderRadius:8, padding:"10px 12px", marginBottom:10, textAlign:"center" }}>
-            <div style={{ fontSize:9, color:"#a78bfa", letterSpacing:2, marginBottom:6, display:"flex", alignItems:"center", justifyContent:"center", gap:4 }}>DCF 適正株価レンジ<InfoBtn id="dcf"/></div>
-            <div style={{ fontSize:20, fontWeight:900, color:"#c0a0f0" }}>{result.dcf_fair_value}</div>
-          </div>
-          {/* Score */}
-          <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"14px 16px", marginBottom:10 }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:"#4a7090" }}>総合ファンダスコア</span><InfoBtn id="fundamental_score"/></div>
-              <span style={{ fontSize:22, fontWeight:900, color:result.fundamental_score>=70?"#00e5a0":result.fundamental_score>=40?"#ffd700":"#ff4d6d" }}>{result.fundamental_score}<span style={{ fontSize:11 }}>/100</span></span>
+          <div style={{ textAlign:"center", fontSize:18, fontWeight:900, color:C.text, marginBottom:16 }}>{result.ticker} ファンダメンタル分析</div>
+
+          {/* ── 財務ハイライト スコアカード ── */}
+          <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:"14px 16px", marginBottom:12, boxShadow:"0 2px 12px #00000040" }}>
+            <div style={{ fontSize:9, color:C.muted, letterSpacing:2, marginBottom:12 }}>📊 財務ハイライト</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+              {[
+                {label:"売上成長率", val:result.revenue_growth, icon:"📈"},
+                {label:"利益成長率", val:result.profit_growth,  icon:"💰"},
+              ].map(({label,val,icon}) => {
+                const isPos = String(val||"").startsWith("+");
+                const isNeg = String(val||"").startsWith("-");
+                const c = isPos ? C.success : isNeg ? C.danger : C.text;
+                return (
+                  <div key={label} style={{ background:`${c}0d`, border:`1px solid ${c}25`, borderRadius:10, padding:"12px 14px", textAlign:"center" }}>
+                    <div style={{ fontSize:16, marginBottom:4 }}>{icon}</div>
+                    <div style={{ fontSize:9, color:C.muted, marginBottom:4 }}>{label}</div>
+                    <div style={{ fontSize:22, fontWeight:900, color:c }}>{val}</div>
+                  </div>
+                );
+              })}
             </div>
-            <ScoreBar value={result.fundamental_score} color={result.fundamental_score>=70?"#00e5a0":result.fundamental_score>=40?"#ffd700":"#ff4d6d"}/>
+          </div>
+
+          {/* ── バリュエーション メーター ── */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:12 }}>
+            {[
+              {label:"PER", infoId:"per", value:result.per?.value, unit:"x", signal:result.per?.signal, max:80, typical:20},
+              {label:"PBR", infoId:"pbr", value:result.pbr?.value, unit:"x", signal:result.pbr?.signal, max:30, typical:3},
+              {label:"ROE", infoId:"roe", value:result.roe?.value, unit:"%", signal:result.roe?.signal, max:100, typical:15},
+            ].map(({label,infoId,value,unit,signal,max,typical}) => {
+              const color = vc[signal] || C.warning;
+              const pct   = Math.min(100, (parseFloat(value||0) / max) * 100);
+              const tPct  = (typical / max) * 100;
+              return (
+                <div key={label} style={{ background:C.card, border:`1px solid ${color}44`, borderRadius:12, padding:"12px 10px", boxShadow:`0 0 12px ${color}12` }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:3 }}>
+                      <span style={{ fontSize:10, color:C.muted }}>{label}</span>
+                      <InfoBtn id={infoId}/>
+                    </div>
+                  </div>
+                  <div style={{ fontSize:22, fontWeight:900, color, marginBottom:4, lineHeight:1 }}>{value}<span style={{ fontSize:11, color:C.muted }}>{unit}</span></div>
+                  <div style={{ fontSize:9, padding:"2px 6px", background:`${color}22`, color, borderRadius:6, display:"inline-block", marginBottom:8 }}>{signal}</div>
+                  <div style={{ position:"relative", height:6, background:C.dim, borderRadius:3, overflow:"visible" }}>
+                    <div style={{ height:"100%", width:`${pct}%`, background:`linear-gradient(90deg,${color}66,${color})`, borderRadius:3 }}/>
+                    <div style={{ position:"absolute", top:-3, left:`${tPct}%`, width:2, height:12, background:C.muted, borderRadius:1 }}/>
+                  </div>
+                  <div style={{ fontSize:8, color:C.muted, marginTop:4 }}>目安:{typical}{unit}</div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ── DCF 適正株価 ── */}
+          <div style={{ background:"#a78bfa10", border:"1px solid #a78bfa30", borderRadius:12, padding:"14px 16px", marginBottom:12, textAlign:"center", boxShadow:"0 0 12px #a78bfa12" }}>
+            <div style={{ fontSize:9, color:"#a78bfa", letterSpacing:2, marginBottom:6, display:"flex", alignItems:"center", justifyContent:"center", gap:4 }}>DCF 適正株価レンジ<InfoBtn id="dcf"/></div>
+            <div style={{ fontSize:24, fontWeight:900, color:"#c0a0f0" }}>{result.dcf_fair_value}</div>
+          </div>
+
+          {/* ── 総合ファンダスコア ── */}
+          <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:"14px 16px", marginBottom:10, boxShadow:"0 2px 12px #00000040" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:C.muted }}>総合ファンダスコア</span><InfoBtn id="fundamental_score"/></div>
+              <span style={{ fontSize:26, fontWeight:900, color:result.fundamental_score>=70?C.success:result.fundamental_score>=40?C.warning:C.danger }}>{result.fundamental_score}<span style={{ fontSize:12, color:C.muted }}>/100</span></span>
+            </div>
+            <ScoreBar value={result.fundamental_score} color={result.fundamental_score>=70?C.success:result.fundamental_score>=40?C.warning:C.danger}/>
           </div>
           {/* Competitors table */}
           <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"12px 14px", marginBottom:10 }}>
@@ -1642,6 +1752,77 @@ function FundamentalTab() {
           </div>
           <AnalysisBasis type="fundamental" result={result}/>
           <Disclaimer/>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Price Level Visualizer ────────────────────────────────────
+function PriceLevelVisualizer() {
+  const [form, setForm] = useState({ price:"", entry:"", sl:"", tp1:"", tp2:"" });
+  const f = (k,v) => setForm(p=>({...p,[k]:v}));
+  const num = v => parseFloat(v)||0;
+  const price = num(form.price);
+  const entry = num(form.entry) || price;
+  const sl    = num(form.sl);
+  const tp1   = num(form.tp1);
+  const tp2   = num(form.tp2);
+  const ready = price > 0 && sl > 0 && tp1 > 0;
+  const low   = Math.min(sl, entry) * 0.98;
+  const high  = Math.max(tp2||tp1, entry) * 1.02;
+  const range = high - low || 1;
+  const pos   = v => `${((v - low) / range) * 100}%`;
+  const rr    = ready ? ((tp1 - entry) / (entry - sl)).toFixed(1) : null;
+
+  return (
+    <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:"14px 16px", marginBottom:12 }}>
+      <div style={{ fontSize:13, fontWeight:700, color:C.accent, marginBottom:12 }}>📐 価格レベル可視化ツール</div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
+        {[["price","現在価格 ($)"],["entry","エントリー ($)"],["sl","損切り ($)"],["tp1","利確① ($)"],["tp2","利確② (任意)"]].map(([k,ph])=>(
+          <div key={k}>
+            <div style={{ fontSize:9, color:C.muted, marginBottom:3 }}>{ph}</div>
+            <input type="number" value={form[k]} onChange={e=>f(k,e.target.value)} placeholder="0"
+              style={{ width:"100%", background:"#04090f", border:`1px solid ${C.dim}`, borderRadius:6, padding:"8px 10px", color:C.text, fontFamily:"inherit", fontSize:12, outline:"none" }}/>
+          </div>
+        ))}
+      </div>
+      {ready && (
+        <div style={{ animation:"fadeIn .3s ease" }}>
+          {/* R/R バー */}
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
+            <span style={{ fontSize:10, color:C.muted, flexShrink:0 }}>R/R比</span>
+            <div style={{ flex:1, display:"flex", height:10, borderRadius:5, overflow:"hidden" }}>
+              <div style={{ width:`${Math.min(50, 100/(1+parseFloat(rr)))}%`, background:C.danger, opacity:0.8 }}/>
+              <div style={{ flex:1, background:C.success, opacity:0.8 }}/>
+            </div>
+            <span style={{ fontSize:14, fontWeight:900, color:parseFloat(rr)>=2?C.success:parseFloat(rr)>=1?C.warning:C.danger }}>1:{rr}</span>
+          </div>
+          {/* 価格バー */}
+          <div style={{ position:"relative", height:60, marginBottom:8, marginTop:16 }}>
+            {/* track */}
+            <div style={{ position:"absolute", top:"50%", left:0, right:0, height:4, background:C.dim, borderRadius:2, transform:"translateY(-50%)" }}/>
+            {/* zone: SL to Entry */}
+            <div style={{ position:"absolute", top:"50%", left:pos(sl), width:`calc(${pos(entry)} - ${pos(sl)})`, height:8, background:`${C.danger}55`, borderRadius:2, transform:"translateY(-50%)" }}/>
+            {/* zone: Entry to TP1 */}
+            <div style={{ position:"absolute", top:"50%", left:pos(entry), width:`calc(${pos(tp1)} - ${pos(entry)})`, height:8, background:`${C.success}55`, borderRadius:2, transform:"translateY(-50%)" }}/>
+            {/* zone: TP1 to TP2 */}
+            {tp2>0 && <div style={{ position:"absolute", top:"50%", left:pos(tp1), width:`calc(${pos(tp2)} - ${pos(tp1)})`, height:8, background:`${C.success}33`, borderRadius:2, transform:"translateY(-50%)" }}/>}
+            {/* labels */}
+            {[
+              {v:sl,    label:"SL",     color:C.danger,   above:true },
+              {v:entry, label:"entry",  color:C.warning,  above:false},
+              {v:price, label:"現在値", color:C.accent,   above:true },
+              {v:tp1,   label:"TP①",   color:C.success,  above:false},
+              ...(tp2>0?[{v:tp2, label:"TP②", color:C.success, above:true}]:[]),
+            ].map(({v,label,color,above})=>(
+              <div key={label} style={{ position:"absolute", left:pos(v), transform:"translateX(-50%)", [above?"bottom":"top"]:above?"calc(50% + 8px)":"calc(50% + 8px)" }}>
+                <div style={{ width:3, height:16, background:color, borderRadius:1, margin:"0 auto" }}/>
+                <div style={{ fontSize:8, color, textAlign:"center", whiteSpace:"nowrap" }}>{label}</div>
+                <div style={{ fontSize:9, color:C.text, textAlign:"center", fontWeight:700 }}>${v}</div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -1830,6 +2011,9 @@ function StrategyTab() {
         )}
       </div>
 
+      {/* Tool 4: Price Level Visualizer */}
+      <PriceLevelVisualizer/>
+
       {/* Tool 3: Scenario */}
       <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:12, padding:"14px 16px", marginBottom:8 }}>
         <div style={{ fontSize:13, fontWeight:700, color:"#a78bfa", marginBottom:12 }}>🧪 シナリオ分析</div>
@@ -1838,15 +2022,35 @@ function StrategyTab() {
         {scenLoading&&<LoadingDots color="#a78bfa" phases={phases3} phase={scenPhase}/>}
         {scenError&&<ErrBox msg={scenError} onRetry={runScenario}/>}
         {scenResult&&!scenLoading&&(
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, animation:"fadeIn .3s ease" }}>
+          <div style={{ animation:"fadeIn .3s ease" }}>
             {(scenResult.scenarios||[]).map((s,i)=>{
-              const sc=scenColor(s);
+              const sc  = scenColor(s);
+              const ret = parseFloat(s.estimated_return);
+              const isPos = ret >= 0;
+              const barW  = `${Math.min(48, Math.abs(ret) * 0.9)}%`;
               return (
-                <div key={i} style={{ background:sc.bg, border:`1px solid ${sc.border}`, borderRadius:10, padding:"12px 14px" }}>
-                  <div style={{ fontSize:12, fontWeight:700, color:"#e8f4ff", marginBottom:4 }}>{s.name}</div>
-                  <div style={{ fontSize:9, color:"#4a7090", marginBottom:8 }}>{s.condition}</div>
-                  <div style={{ fontSize:20, fontWeight:900, color:sc.c, marginBottom:4 }}>{s.estimated_return}</div>
-                  <div style={{ fontSize:12, color:sc.c, fontWeight:700, marginBottom:8 }}>{s.estimated_pnl}</div>
+                <div key={i} style={{ background:sc.bg, border:`1px solid ${sc.border}`, borderRadius:12, padding:"14px 16px", marginBottom:8, boxShadow:`0 2px 12px ${sc.c}12` }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
+                    <div>
+                      <div style={{ fontSize:13, fontWeight:700, color:C.text }}>{s.name}</div>
+                      <div style={{ fontSize:9, color:C.muted }}>{s.condition}</div>
+                    </div>
+                    <div style={{ textAlign:"right" }}>
+                      <div style={{ fontSize:22, fontWeight:900, color:sc.c, lineHeight:1 }}>{s.estimated_return}</div>
+                      <div style={{ fontSize:12, color:sc.c, fontWeight:700 }}>{s.estimated_pnl}</div>
+                    </div>
+                  </div>
+                  {/* リターンバー */}
+                  <div style={{ position:"relative", height:10, background:C.dim, borderRadius:5, overflow:"hidden", marginBottom:6 }}>
+                    <div style={{ position:"absolute", left:"50%", top:0, bottom:0, width:1, background:C.muted }}/>
+                    {isPos
+                      ? <div style={{ position:"absolute", left:"50%", top:0, bottom:0, width:barW, background:C.success, borderRadius:"0 5px 5px 0" }}/>
+                      : <div style={{ position:"absolute", right:"50%", top:0, bottom:0, width:barW, background:C.danger, borderRadius:"5px 0 0 5px" }}/>
+                    }
+                  </div>
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:8, color:C.muted, marginBottom:8 }}>
+                    <span>最大損失</span><span>±0%</span><span>最大利益</span>
+                  </div>
                   <div style={{ fontSize:10, color:"#507090", lineHeight:1.5 }}>{s.comment}</div>
                 </div>
               );
@@ -2235,7 +2439,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <ForexProvider>
-      <div style={{ minHeight:"100vh", background:"#04090f", fontFamily:"'Courier New', monospace", color:"#c8d8e8", paddingBottom:72 }}>
+      <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"'Courier New', monospace", color:"#c8d8e8", paddingBottom:72 }}>
         {showDisclaimer && <DisclaimerModal onAccept={acceptDisclaimer}/>}
         {showPremium   && <PremiumModal onClose={() => setShowPremium(false)}/>}
         {toast && (
