@@ -134,7 +134,7 @@ const C = {
   warning: "#ffd700",
   danger:  "#ff4d6d",
   text:    "#e8f4ff",
-  muted:   "#4a7090",
+  muted:   "#7a90a8",
   dim:     "#1a3050",
 };
 
@@ -453,10 +453,10 @@ function ForexBadge() {
       title={isPending ? `株価取得後に為替を取得（あと${pendingSec}秒）` : "クリックで手動更新（30分ごと自動更新）"}
       style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"4px 10px", background:"#00c9ff08", border:"1px solid #00c9ff22", borderRadius:10, cursor:isPending?"default":"pointer", marginTop:6 }}>
       <span style={{ width:5, height:5, borderRadius:"50%",
-        background: loading ? "#ffd700" : isPending ? "#2a4560" : rate ? "#00c9ff" : "#4a7090",
+        background: loading ? "#ffd700" : isPending ? "#556677" : rate ? "#00c9ff" : "#7a90a8",
         display:"inline-block", animation: loading ? "pulse 1s infinite" : "none" }}/>
       <span style={{ fontSize:10, fontWeight:700,
-        color: loading ? "#ffd700" : isPending ? "#2a4560" : rate ? "#00c9ff" : "#4a7090" }}>
+        color: loading ? "#ffd700" : isPending ? "#556677" : rate ? "#00c9ff" : "#7a90a8" }}>
         {loading
           ? "為替取得中..."
           : isPending
@@ -465,7 +465,7 @@ function ForexBadge() {
           ? `1 USD = ${rate.toFixed(2)} 円`
           : "為替レート未取得（手動更新可）"}
       </span>
-      {timeStr && <span style={{ fontSize:9, color:"#2a4560" }}>{timeStr} 更新 · 30分毎</span>}
+      {timeStr && <span style={{ fontSize:9, color:"#556677" }}>{timeStr} 更新 · 30分毎</span>}
     </div>
   );
 }
@@ -514,7 +514,7 @@ function InputRow({ value, onChange, onEnter, placeholder, loading, btnLabel, bt
         placeholder={placeholder}
         style={{ flex:1, background:"#04090f", border:"1px solid #0d2535", borderRadius:8, padding:"10px 14px", color:"#e8f4ff", fontFamily:"inherit", fontSize:13, outline:"none" }}/>
       <button onClick={onEnter} disabled={loading||!value.trim()}
-        style={{ padding:"10px 18px", background:loading?"#0d2535":`${btnColor}22`, border:`1px solid ${loading?"#0d2535":btnColor+"55"}`, borderRadius:8, color:loading?"#4a7090":btnColor, cursor:loading?"not-allowed":"pointer", fontFamily:"inherit", fontSize:13, fontWeight:700 }}>
+        style={{ padding:"10px 18px", background:loading?"#0d2535":`${btnColor}22`, border:`1px solid ${loading?"#0d2535":btnColor+"55"}`, borderRadius:8, color:loading?"#7a90a8":btnColor, cursor:loading?"not-allowed":"pointer", fontFamily:"inherit", fontSize:13, fontWeight:700 }}>
         {loading?"分析中...":btnLabel}
       </button>
     </div>
@@ -532,7 +532,7 @@ function ErrBox({ msg, onRetry }) {
 // ── Disclaimer (inline) ───────────────────────────────────────
 function Disclaimer() {
   return (
-    <div style={{ padding:"12px 14px", background:"#06111a", border:"1px solid #1a2e40", borderRadius:8, fontSize:10, color:"#3a5570", lineHeight:1.9, marginTop:12 }}>
+    <div style={{ padding:"12px 14px", background:"#06111a", border:"1px solid #1a2e40", borderRadius:8, fontSize:10, color:"#888888", lineHeight:1.9, marginTop:12 }}>
       <div style={{ fontSize:9, color:"#ff6b35", letterSpacing:2, marginBottom:5, fontWeight:700 }}>⚠ 免責事項</div>
       本アプリが提供する情報はAI（Claude）による<span style={{ color:"#ff9040" }}>参考情報</span>であり、<span style={{ color:"#ff9040" }}>投資勧誘・投資助言を目的としたものではありません</span>。分析結果の正確性・完全性を保証するものではなく、実際の株価・財務データと乖離する場合があります。投資判断は必ずご自身の責任において行ってください。過去の実績・予測は将来の成果を保証するものではありません。
     </div>
@@ -547,8 +547,8 @@ function DisclaimerModal({ onAccept }) {
       <div style={{ background:"#09141e", border:"1px solid #1a3550", borderRadius:16, padding:"28px 20px", maxWidth:420, width:"100%", boxShadow:"0 24px 64px #000000cc", maxHeight:"90vh", overflowY:"auto" }}>
         <div style={{ fontSize:9, color:"#ff6b35", letterSpacing:3, marginBottom:8, fontWeight:700 }}>⚠ ご利用前にお読みください</div>
         <div style={{ fontSize:20, fontWeight:900, color:"#e8f4ff", marginBottom:4 }}>Kabu.AI</div>
-        <div style={{ fontSize:12, color:"#4a7090", marginBottom:20 }}>免責事項</div>
-        <div style={{ fontSize:12, color:"#6090a8", lineHeight:1.9, marginBottom:20 }}>
+        <div style={{ fontSize:12, color:"#7a90a8", marginBottom:20 }}>免責事項</div>
+        <div style={{ fontSize:12, color:"#8aaac0", lineHeight:1.9, marginBottom:20 }}>
           本サービスは<span style={{ color:"#ff9040" }}>投資情報の提供を目的</span>としており、投資勧誘・投資助言を目的としたものでは<span style={{ color:"#ff9040" }}>ありません</span>。<br/><br/>
           提供する情報はAI（Claude）による参考情報であり、<span style={{ color:"#ff9040" }}>正確性・完全性を保証するものではありません</span>。実際の株価・財務データと乖離する場合があります。<br/><br/>
           投資判断は必ず<span style={{ color:"#e8f4ff", fontWeight:700 }}>ご自身の責任</span>において行ってください。本サービスを利用したことによる損失について、一切の責任を負いません。<br/><br/>
@@ -562,7 +562,7 @@ function DisclaimerModal({ onAccept }) {
           </span>
         </label>
         <button onClick={() => checked && onAccept()} disabled={!checked}
-          style={{ width:"100%", padding:"14px", background:checked?"#00e5a022":"#0d2535", border:`1px solid ${checked?"#00e5a055":"#0d2535"}`, borderRadius:10, color:checked?"#00e5a0":"#2a4560", cursor:checked?"pointer":"not-allowed", fontFamily:"inherit", fontSize:14, fontWeight:700, transition:"all .2s" }}>
+          style={{ width:"100%", padding:"14px", background:checked?"#00e5a022":"#0d2535", border:`1px solid ${checked?"#00e5a055":"#0d2535"}`, borderRadius:10, color:checked?"#00e5a0":"#556677", cursor:checked?"pointer":"not-allowed", fontFamily:"inherit", fontSize:14, fontWeight:700, transition:"all .2s" }}>
           同意して Kabu.AI を始める →
         </button>
       </div>
@@ -600,9 +600,9 @@ function PremiumModal({ onClose }) {
           <div>
             <div style={{ fontSize:9, color:"#ffd700", letterSpacing:3, marginBottom:4, fontWeight:700 }}>PREMIUM PLANS</div>
             <div style={{ fontSize:18, fontWeight:900, color:"#e8f4ff" }}>プレミアム登録</div>
-            <div style={{ fontSize:11, color:"#4a7090", marginTop:2 }}>Kabu.AI をフル活用する</div>
+            <div style={{ fontSize:11, color:"#7a90a8", marginTop:2 }}>Kabu.AI をフル活用する</div>
           </div>
-          <button onClick={onClose} style={{ background:"#ffffff0d", border:"none", color:"#4a7090", fontSize:15, cursor:"pointer", width:30, height:30, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>✕</button>
+          <button onClick={onClose} style={{ background:"#ffffff0d", border:"none", color:"#7a90a8", fontSize:15, cursor:"pointer", width:30, height:30, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>✕</button>
         </div>
 
         {[
@@ -616,20 +616,20 @@ function PremiumModal({ onClose }) {
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
                 <div>
                   <div style={{ fontSize:14, fontWeight:800, color:"#e8f4ff", marginBottom:2 }}>{info.label}</div>
-                  <div style={{ fontSize:10, color:"#4a7090" }}>{info.desc}</div>
+                  <div style={{ fontSize:10, color:"#7a90a8" }}>{info.desc}</div>
                 </div>
                 <div style={{ textAlign:"right", flexShrink:0, marginLeft:12 }}>
                   <div style={{ fontSize:22, fontWeight:900, color:info.color, lineHeight:1 }}>{info.price}</div>
-                  <div style={{ fontSize:9, color:"#4a7090" }}>/月（税込）</div>
+                  <div style={{ fontSize:9, color:"#7a90a8" }}>/月（税込）</div>
                 </div>
               </div>
               <div style={{ marginBottom:12 }}>
                 {features.map((f,i) => (
-                  <div key={i} style={{ fontSize:11, color:"#6090a8", marginBottom:3 }}>✓ {f}</div>
+                  <div key={i} style={{ fontSize:11, color:"#8aaac0", marginBottom:3 }}>✓ {f}</div>
                 ))}
               </div>
               <button onClick={() => handleCheckout(plan)} disabled={loading !== null}
-                style={{ width:"100%", padding:"11px", background:loading===plan?"#0d2535":`${info.color}18`, border:`1px solid ${loading===plan?"#0d2535":info.color+"44"}`, borderRadius:8, color:loading===plan?"#4a7090":info.color, cursor:loading!==null?"not-allowed":"pointer", fontFamily:"inherit", fontSize:13, fontWeight:700 }}>
+                style={{ width:"100%", padding:"11px", background:loading===plan?"#0d2535":`${info.color}18`, border:`1px solid ${loading===plan?"#0d2535":info.color+"44"}`, borderRadius:8, color:loading===plan?"#7a90a8":info.color, cursor:loading!==null?"not-allowed":"pointer", fontFamily:"inherit", fontSize:13, fontWeight:700 }}>
                 {loading===plan ? "処理中..." : `${info.label}に登録する →`}
               </button>
             </div>
@@ -637,7 +637,7 @@ function PremiumModal({ onClose }) {
         })}
 
         {error && <div style={{ padding:"8px 12px", background:"#ff4d6d15", border:"1px solid #ff4d6d40", borderRadius:8, color:"#ff4d6d", fontSize:12, marginBottom:10 }}>⚠ {error}</div>}
-        <div style={{ fontSize:10, color:"#2a4560", textAlign:"center", lineHeight:1.7 }}>
+        <div style={{ fontSize:10, color:"#556677", textAlign:"center", lineHeight:1.7 }}>
           🔒 Stripeによる安全な決済 · いつでも解約可能 · 自動更新
         </div>
       </div>
@@ -691,25 +691,25 @@ function AnalysisBasis({ type, result, realData }) {
   return (
     <div style={{ background:"#07111a", border:"1px solid #0d2535", borderRadius:8, marginTop:8, overflow:"hidden" }}>
       <button onClick={() => setOpen(o => !o)}
-        style={{ width:"100%", padding:"10px 12px", background:"transparent", border:"none", color:"#4a7090", cursor:"pointer", fontFamily:"inherit", fontSize:11, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        style={{ width:"100%", padding:"10px 12px", background:"transparent", border:"none", color:"#7a90a8", cursor:"pointer", fontFamily:"inherit", fontSize:11, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         <span>📋 AI分析の根拠</span>
         <span style={{ fontSize:10 }}>{open ? "▲ 閉じる" : "▼ 展開する"}</span>
       </button>
       {open && (
         <div style={{ padding:"0 12px 12px", borderTop:"1px solid #0d2030" }}>
-          <div style={{ fontSize:9, color:"#2a4560", marginBottom:10, paddingTop:10 }}>
+          <div style={{ fontSize:9, color:"#556677", marginBottom:10, paddingTop:10 }}>
             モデル: claude-haiku-4-5 · 分析日: {new Date().toLocaleDateString("ja-JP")}
           </div>
           {items.map((item, i) => (
             <div key={i} style={{ marginBottom:8 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:item.note ? 2 : 0 }}>
-                <span style={{ fontSize:10, color:"#4a7090" }}>{item.label}</span>
+                <span style={{ fontSize:10, color:"#7a90a8" }}>{item.label}</span>
                 <span style={{ fontSize:11, color:"#8ab0c8", fontWeight:700 }}>{item.value}</span>
               </div>
-              {item.note && <div style={{ fontSize:10, color:"#3a5570", lineHeight:1.5 }}>{item.note}</div>}
+              {item.note && <div style={{ fontSize:10, color:"#888888", lineHeight:1.5 }}>{item.note}</div>}
             </div>
           ))}
-          <div style={{ marginTop:10, paddingTop:10, borderTop:"1px solid #0d2030", fontSize:9, color:"#2a4560" }}>
+          <div style={{ marginTop:10, paddingTop:10, borderTop:"1px solid #0d2030", fontSize:9, color:"#556677" }}>
             ※ 本分析はAIの知識ベースに基づく推定を含みます。実際のデータと異なる場合があります。
           </div>
         </div>
@@ -747,7 +747,7 @@ function InfoBtn({ id }) {
   return (
     <>
       <button onClick={e=>{ e.stopPropagation(); setOpen(true); }}
-        style={{ background:"transparent", border:"none", color:"#2a4560", cursor:"pointer", fontSize:12, padding:"0 2px", lineHeight:1, flexShrink:0 }}>❓</button>
+        style={{ background:"transparent", border:"none", color:"#556677", cursor:"pointer", fontSize:12, padding:"0 2px", lineHeight:1, flexShrink:0 }}>❓</button>
       {open && (
         <div onClick={()=>setOpen(false)}
           style={{ position:"fixed", inset:0, background:"#000000b0", zIndex:9999, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 16px" }}>
@@ -756,7 +756,7 @@ function InfoBtn({ id }) {
             <div style={{ fontSize:15, fontWeight:900, color:"#e8f4ff", marginBottom:14, paddingRight:28 }}>{info.title}</div>
             <div style={{ fontSize:12, color:"#7090a8", lineHeight:1.9, whiteSpace:"pre-wrap" }}>{info.body}</div>
             <button onClick={()=>setOpen(false)}
-              style={{ position:"absolute", top:14, right:14, background:"#ffffff0d", border:"none", color:"#4a7090", fontSize:15, cursor:"pointer", width:28, height:28, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
+              style={{ position:"absolute", top:14, right:14, background:"#ffffff0d", border:"none", color:"#7a90a8", fontSize:15, cursor:"pointer", width:28, height:28, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
           </div>
         </div>
       )}
@@ -797,11 +797,11 @@ function StockCard({ stock, color, expanded, onToggle }) {
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
             <span style={{ fontSize:15, fontWeight:800, color:"#e8f4ff" }}>{stock.ticker}</span>
-            <span style={{ fontSize:10, color:"#4a6070" }}>{stock.country}</span>
+            <span style={{ fontSize:10, color:"#7a8898" }}>{stock.country}</span>
             <span style={{ fontSize:10, padding:"2px 6px", background:`${rc}22`, color:rc, borderRadius:10, border:`1px solid ${rc}44` }}>{stock.rating}</span>
-            <span style={{ fontSize:10, padding:"2px 6px", background:"#ffffff08", color:"#4a7090", borderRadius:6 }}>{stock.sector}</span>
+            <span style={{ fontSize:10, padding:"2px 6px", background:"#ffffff08", color:"#7a90a8", borderRadius:6 }}>{stock.sector}</span>
           </div>
-          <div style={{ fontSize:11, color:"#4a7090", marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{stock.company}</div>
+          <div style={{ fontSize:11, color:"#7a90a8", marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{stock.company}</div>
         </div>
         <div style={{ textAlign:"right", flexShrink:0 }}>
           <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-end" }}>
@@ -810,7 +810,7 @@ function StockCard({ stock, color, expanded, onToggle }) {
             </span>
             <span style={{ fontSize:8, padding:"1px 4px",
               background: stock._realPrice ? "#00c9ff22" : "#ffffff08",
-              color:       stock._realPrice ? "#00c9ff"   : "#4a7090",
+              color:       stock._realPrice ? "#00c9ff"   : "#7a90a8",
               borderRadius:3, border:`1px solid ${stock._realPrice?"#00c9ff33":"#0d2030"}` }}>
               {stock._realPrice ? "RT" : "AI推定"}
             </span>
@@ -823,10 +823,10 @@ function StockCard({ stock, color, expanded, onToggle }) {
       </div>
       {expanded&&(
         <div style={{ marginTop:14, paddingTop:14, borderTop:"1px solid #0d2030" }}>
-          <div style={{ marginBottom:10, fontSize:11, color:"#6090a8" }}>目標株価: <span style={{ color:"#e8f4ff", fontWeight:700 }}>{stock.target_price}</span></div>
+          <div style={{ marginBottom:10, fontSize:11, color:"#8aaac0" }}>目標株価: <span style={{ color:"#e8f4ff", fontWeight:700 }}>{stock.target_price}</span></div>
           {[["モメンタム",stock.momentum],["成長性",stock.growth],["安全性",stock.safety]].map(([lbl,val])=>(
             <div key={lbl} style={{ display:"flex", gap:8, alignItems:"center", marginBottom:7 }}>
-              <span style={{ fontSize:10, color:"#4a7090", width:64 }}>{lbl}</span>
+              <span style={{ fontSize:10, color:"#7a90a8", width:64 }}>{lbl}</span>
               <Bar value={val} color={color}/>
               <span style={{ fontSize:11, color, width:16, textAlign:"right" }}>{val}</span>
             </div>
@@ -852,7 +852,7 @@ function StockCard({ stock, color, expanded, onToggle }) {
                 <span style={{ fontSize:9, color:"#ffd700", letterSpacing:2 }}>⚡ 売買戦略</span>
                 <span style={{ fontSize:8, padding:"1px 5px", borderRadius:4,
                   background: stock._techBased ? "#00e5a018" : "#ffffff08",
-                  color:      stock._techBased ? "#00e5a0"   : "#4a7090",
+                  color:      stock._techBased ? "#00e5a0"   : "#7a90a8",
                   border:     `1px solid ${stock._techBased ? "#00e5a035" : "#0d2030"}` }}>
                   {stock._techBased
                     ? `BB+RSI${stock._rsi != null ? `(${stock._rsi.toFixed(0)})` : ""}`
@@ -949,7 +949,7 @@ function RankingTab() {
     <div>
       <div style={{ display:"flex", gap:2, padding:"0 16px" }}>
         {PERIODS.map(p=>(
-          <button key={p.key} onClick={()=>setPeriod(p.key)} style={{ flex:1, padding:"12px 8px", background:period===p.key?`${p.color}18`:"transparent", border:`1px solid ${period===p.key?p.color+"55":"#0d2030"}`, borderBottom:"none", borderRadius:"10px 10px 0 0", color:period===p.key?p.color:"#3a5570", cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:700 }}>
+          <button key={p.key} onClick={()=>setPeriod(p.key)} style={{ flex:1, padding:"12px 8px", background:period===p.key?`${p.color}18`:"transparent", border:`1px solid ${period===p.key?p.color+"55":"#0d2030"}`, borderBottom:"none", borderRadius:"10px 10px 0 0", color:period===p.key?p.color:"#888888", cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:700 }}>
             <div>{p.icon} {p.label}</div><div style={{ fontSize:9, marginTop:2, opacity:.7 }}>{p.sub}</div>
           </button>
         ))}
@@ -1014,26 +1014,26 @@ function AnalysisTab({ initialTicker }) {
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12, padding:"14px 16px", background:"#09141e", border:"1px solid #0d2030", borderRadius:12 }}>
               <div>
                 <div style={{ fontSize:22, fontWeight:900, color:"#eaf4ff" }}>{result.ticker}</div>
-                <div style={{ fontSize:11, color:"#4a7090", marginBottom:4 }}>{result.company} · {result.sector}</div>
+                <div style={{ fontSize:11, color:"#7a90a8", marginBottom:4 }}>{result.company} · {result.sector}</div>
                 <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                   <span style={{ fontSize:15, color:"#e8f4ff", fontWeight:700 }}>{result.current_price}</span>
                   <span style={{ fontSize:8, padding:"1px 4px",
                     background: result._realPrice ? "#00c9ff22" : "#ffffff08",
-                    color:      result._realPrice ? "#00c9ff"   : "#4a7090",
+                    color:      result._realPrice ? "#00c9ff"   : "#7a90a8",
                     borderRadius:3, border:`1px solid ${result._realPrice ? "#00c9ff33" : "#0d2030"}` }}>
                     {result._realPrice ? "RT" : "AI推定"}
                   </span>
                 </div>
-                {rate&&result.current_price&&<div style={{ fontSize:10, color:"#4a7090" }}>≈ ¥{Math.round(parseFloat(result.current_price.replace(/[^0-9.]/g,""))*rate).toLocaleString()}</div>}
+                {rate&&result.current_price&&<div style={{ fontSize:10, color:"#7a90a8" }}>≈ ¥{Math.round(parseFloat(result.current_price.replace(/[^0-9.]/g,""))*rate).toLocaleString()}</div>}
               </div>
               <div style={{ textAlign:"center" }}>
                 <div style={{ padding:"10px 16px", background:v.bg, border:`1px solid ${v.border}`, borderRadius:12, color:v.color, fontSize:15, fontWeight:900, marginBottom:8 }}>{result.buy_rating}</div>
-                <div style={{ fontSize:10, color:"#4a7090" }}>保有期間: {result.hold_period}</div>
+                <div style={{ fontSize:10, color:"#7a90a8" }}>保有期間: {result.hold_period}</div>
               </div>
             </div>
             <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"14px 16px", marginBottom:10 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:"#4a7090" }}>買い推奨度</span><InfoBtn id="overall_score"/></div>
+                <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:"#7a90a8" }}>買い推奨度</span><InfoBtn id="overall_score"/></div>
                 <span style={{ fontSize:22, fontWeight:900, color:sc }}>{result.overall_score}<span style={{ fontSize:11 }}>/100</span></span>
               </div>
               <ScoreBar value={result.overall_score} color={sc}/>
@@ -1141,16 +1141,16 @@ function PortfolioTab() {
             {label:"勝率",value:`${winRate}%`,color:winRate>=60?"#00e5a0":winRate>=40?"#ffd700":"#ff4d6d"}
           ].map(({label,value,sub,color})=>(
             <div key={label} style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"10px 12px", textAlign:"center" }}>
-              <div style={{ fontSize:9, color:"#4a7090", marginBottom:4 }}>{label}</div>
+              <div style={{ fontSize:9, color:"#7a90a8", marginBottom:4 }}>{label}</div>
               <div style={{ fontSize:14, fontWeight:900, color }}>{value}</div>
-              {sub&&<div style={{ fontSize:9, color:"#4a7090", marginTop:2 }}>{sub}</div>}
+              {sub&&<div style={{ fontSize:9, color:"#7a90a8", marginTop:2 }}>{sub}</div>}
             </div>
           ))}
         </div>
       )}
       <div style={{ display:"flex", gap:8, marginBottom:16 }}>
         <button onClick={()=>setShowForm(!showForm)} style={{ flex:1, padding:"10px", background:"#00e5a015", border:"1px solid #00e5a040", borderRadius:8, color:"#00e5a0", cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:700 }}>+ 銘柄を追加</button>
-        <button onClick={runDiagnosis} disabled={loading||!holdings.length} style={{ flex:1, padding:"10px", background:loading?"#0d2535":"#a78bfa15", border:`1px solid ${loading?"#0d2535":"#a78bfa40"}`, borderRadius:8, color:loading?"#4a7090":"#a78bfa", cursor:loading||!holdings.length?"not-allowed":"pointer", fontFamily:"inherit", fontSize:13, fontWeight:700 }}>{loading?"診断中...":"🤖 AIに全体診断"}</button>
+        <button onClick={runDiagnosis} disabled={loading||!holdings.length} style={{ flex:1, padding:"10px", background:loading?"#0d2535":"#a78bfa15", border:`1px solid ${loading?"#0d2535":"#a78bfa40"}`, borderRadius:8, color:loading?"#7a90a8":"#a78bfa", cursor:loading||!holdings.length?"not-allowed":"pointer", fontFamily:"inherit", fontSize:13, fontWeight:700 }}>{loading?"診断中...":"🤖 AIに全体診断"}</button>
       </div>
       {showForm&&(
         <div style={{ background:"#09141e", border:"1px solid #0d2535", borderRadius:10, padding:14, marginBottom:16, animation:"fadeIn .2s ease" }}>
@@ -1165,14 +1165,14 @@ function PortfolioTab() {
       {loading&&<LoadingDots color="#a78bfa" phases={phases} phase={phase}/>}
       {error&&<ErrBox msg={error}/>}
       {holdings.length===0?(
-        <div style={{ textAlign:"center", padding:"40px 20px", color:"#3a5570", fontSize:13 }}>銘柄を追加してポートフォリオを作成してください</div>
+        <div style={{ textAlign:"center", padding:"40px 20px", color:"#888888", fontSize:13 }}>銘柄を追加してポートフォリオを作成してください</div>
       ):(
         <div>
           {holdings.map(h=>{
             const dh=diagH.find(d=>d.ticker===h.ticker);
             const ep=dh?parseFloat((dh.estimated_price||"0").replace(/[^0-9.]/g,"")): null;
             const pnlPct=ep?((ep-parseFloat(h.purchase_price))/parseFloat(h.purchase_price)*100).toFixed(1):null;
-            const vcolor=dh?(vc[dh.verdict]||"#4a7090"):"#4a7090";
+            const vcolor=dh?(vc[dh.verdict]||"#7a90a8"):"#7a90a8";
             return (
               <div key={h.id} style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"12px 14px", marginBottom:8 }}>
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
@@ -1181,18 +1181,18 @@ function PortfolioTab() {
                       <span style={{ fontSize:16, fontWeight:900, color:"#e8f4ff" }}>{h.ticker}</span>
                       {dh&&<span style={{ fontSize:10, padding:"2px 8px", background:`${vcolor}22`, color:vcolor, borderRadius:8, border:`1px solid ${vcolor}44` }}>{dh.verdict}</span>}
                     </div>
-                    <div style={{ fontSize:10, color:"#4a7090", marginTop:2 }}>取得: ${h.purchase_price} × {h.shares}株{h.purchase_date&&` · ${h.purchase_date}`}</div>
+                    <div style={{ fontSize:10, color:"#7a90a8", marginTop:2 }}>取得: ${h.purchase_price} × {h.shares}株{h.purchase_date&&` · ${h.purchase_date}`}</div>
                   </div>
                   <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                     {ep&&<div style={{ textAlign:"right" }}>
-                      <div style={{ fontSize:13, color:"#e8f4ff", fontWeight:700 }}>${ep.toFixed(0)}<span style={{ fontSize:9, color:"#4a7090" }}> 推計</span></div>
-                      {rate&&<div style={{ fontSize:9, color:"#4a7090" }}>≈ ¥{Math.round(ep*rate).toLocaleString()}</div>}
+                      <div style={{ fontSize:13, color:"#e8f4ff", fontWeight:700 }}>${ep.toFixed(0)}<span style={{ fontSize:9, color:"#7a90a8" }}> 推計</span></div>
+                      {rate&&<div style={{ fontSize:9, color:"#7a90a8" }}>≈ ¥{Math.round(ep*rate).toLocaleString()}</div>}
                       <div style={{ fontSize:12, color:parseFloat(pnlPct)>=0?"#00e5a0":"#ff4d6d", fontWeight:700 }}>{parseFloat(pnlPct)>=0?"+":""}{pnlPct}%</div>
                     </div>}
                     <button onClick={()=>save(holdings.filter(x=>x.id!==h.id))} style={{ background:"#ff4d6d15", border:"1px solid #ff4d6d30", borderRadius:6, color:"#ff4d6d", cursor:"pointer", fontSize:11, padding:"4px 8px", fontFamily:"inherit" }}>削除</button>
                   </div>
                 </div>
-                {dh?.comment&&<div style={{ fontSize:11, color:"#507090", borderTop:"1px solid #0d2030", paddingTop:8, marginTop:8, lineHeight:1.5 }}>▸ {dh.comment}</div>}
+                {dh?.comment&&<div style={{ fontSize:11, color:"#7a90a8", borderTop:"1px solid #0d2030", paddingTop:8, marginTop:8, lineHeight:1.5 }}>▸ {dh.comment}</div>}
               </div>
             );
           })}
@@ -1231,7 +1231,7 @@ function MacroTab() {
       {!result&&!loading&&!error&&(
         <div style={{ textAlign:"center", padding:"48px 20px" }}>
           <div style={{ fontSize:48, marginBottom:16 }}>🌍</div>
-          <div style={{ fontSize:14, color:"#4a7090", marginBottom:24 }}>AIが最新のマクロ経済環境を分析します</div>
+          <div style={{ fontSize:14, color:"#7a90a8", marginBottom:24 }}>AIが最新のマクロ経済環境を分析します</div>
           <button onClick={analyze} style={{ padding:"14px 32px", background:"#00c9ff22", border:"1px solid #00c9ff55", borderRadius:12, color:"#00c9ff", cursor:"pointer", fontFamily:"inherit", fontSize:15, fontWeight:700 }}>🔍 マクロ環境を分析する</button>
         </div>
       )}
@@ -1240,10 +1240,10 @@ function MacroTab() {
       {result&&!loading&&(
         <div style={{ animation:"fadeIn .4s ease" }}>
           <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:12, padding:16, marginBottom:12, textAlign:"center" }}>
-            <div style={{ fontSize:9, color:"#4a7090", letterSpacing:3, marginBottom:8, display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>MARKET SCORE · {result.updated}<InfoBtn id="market_score"/></div>
+            <div style={{ fontSize:9, color:"#7a90a8", letterSpacing:3, marginBottom:8, display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>MARKET SCORE · {result.updated}<InfoBtn id="market_score"/></div>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:16, marginBottom:12 }}>
               <div style={{ fontSize:52, fontWeight:900, color:sc[result.sentiment]||"#00e5a0" }}>{result.market_score}</div>
-              <div><div style={{ fontSize:22, fontWeight:900, color:sc[result.sentiment]||"#00e5a0" }}>{result.sentiment}相場</div><div style={{ fontSize:11, color:"#4a7090" }}>総合スコア /100</div></div>
+              <div><div style={{ fontSize:22, fontWeight:900, color:sc[result.sentiment]||"#00e5a0" }}>{result.sentiment}相場</div><div style={{ fontSize:11, color:"#7a90a8" }}>総合スコア /100</div></div>
             </div>
             <ScoreBar value={result.market_score} color={sc[result.sentiment]||"#00e5a0"}/>
           </div>
@@ -1257,7 +1257,7 @@ function MacroTab() {
               ["10年債利回り",result.bond_yield_10y,"#ff6b35"]
             ].map(([label,value,color])=>(
               <div key={label} style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:8, padding:"10px 12px" }}>
-                <div style={{ fontSize:9, color:"#4a7090", letterSpacing:2, marginBottom:4 }}>{label}</div>
+                <div style={{ fontSize:9, color:"#7a90a8", letterSpacing:2, marginBottom:4 }}>{label}</div>
                 <div style={{ fontSize:12, color, fontWeight:700, lineHeight:1.4 }}>{value}</div>
               </div>
             ))}
@@ -1275,7 +1275,7 @@ function MacroTab() {
                     <div style={{ height:3, background:"#ffffff0d", borderRadius:2, overflow:"hidden", marginBottom:3 }}>
                       <div style={{ height:"100%", width:`${s.score*10}%`, background:secC(s.score) }}/>
                     </div>
-                    <div style={{ fontSize:9, color:"#4a7090" }}>{s.reason}</div>
+                    <div style={{ fontSize:9, color:"#7a90a8" }}>{s.reason}</div>
                   </div>
                 ))}
               </div>
@@ -1293,7 +1293,7 @@ function MacroTab() {
             <div style={{ fontSize:9, color:"#00c9ff", letterSpacing:2, marginBottom:4 }}>▶ 総合サマリー</div>
             <div style={{ fontSize:12, color:"#8ab0c8", lineHeight:1.7 }}>{result.summary}</div>
           </div>
-          <button onClick={analyze} style={{ width:"100%", padding:"10px", background:"#00c9ff0d", border:"1px solid #00c9ff25", borderRadius:8, color:"#4a7090", cursor:"pointer", fontFamily:"inherit", fontSize:12 }}>🔄 再分析する</button>
+          <button onClick={analyze} style={{ width:"100%", padding:"10px", background:"#00c9ff0d", border:"1px solid #00c9ff25", borderRadius:8, color:"#7a90a8", cursor:"pointer", fontFamily:"inherit", fontSize:12 }}>🔄 再分析する</button>
           <Disclaimer/>
         </div>
       )}
@@ -1320,13 +1320,13 @@ function WatchlistTab({ onAnalyze }) {
           <button onClick={addItem} style={{ width:"100%", padding:"8px", background:"#ffd70022", border:"1px solid #ffd70055", borderRadius:6, color:"#ffd700", cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:700 }}>追加する</button>
         </div>
       )}
-      {items.length===0?<div style={{ textAlign:"center", padding:"48px 20px", color:"#3a5570", fontSize:13 }}>⭐ ウォッチリストに銘柄を追加してください</div>:
+      {items.length===0?<div style={{ textAlign:"center", padding:"48px 20px", color:"#888888", fontSize:13 }}>⭐ ウォッチリストに銘柄を追加してください</div>:
         items.map(item=>(
           <div key={item.id} style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"12px 14px", marginBottom:8 }}>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:(item.memo||editId===item.id)?8:0 }}>
               <div>
                 <div style={{ fontSize:16, fontWeight:900, color:"#e8f4ff" }}>{item.ticker}</div>
-                <div style={{ fontSize:9, color:"#3a5570" }}>追加日: {item.added}</div>
+                <div style={{ fontSize:9, color:"#888888" }}>追加日: {item.added}</div>
               </div>
               <div style={{ display:"flex", gap:6 }}>
                 <button onClick={()=>onAnalyze(item.ticker)} style={{ padding:"6px 12px", background:"#00c9ff22", border:"1px solid #00c9ff55", borderRadius:6, color:"#00c9ff", cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:700 }}>🔍 分析</button>
@@ -1339,10 +1339,10 @@ function WatchlistTab({ onAnalyze }) {
                 <textarea value={editMemo} onChange={e=>setEditMemo(e.target.value)} style={{ width:"100%", background:"#04090f", border:"1px solid #0d2535", borderRadius:6, padding:"8px 10px", color:"#e8f4ff", fontFamily:"inherit", fontSize:12, outline:"none", resize:"none", height:56, marginBottom:6 }}/>
                 <div style={{ display:"flex", gap:6 }}>
                   <button onClick={()=>{save(items.map(i=>i.id===item.id?{...i,memo:editMemo}:i));setEditId(null);}} style={{ flex:1, padding:"6px", background:"#00e5a022", border:"1px solid #00e5a055", borderRadius:6, color:"#00e5a0", cursor:"pointer", fontFamily:"inherit", fontSize:12 }}>保存</button>
-                  <button onClick={()=>setEditId(null)} style={{ padding:"6px 10px", background:"#ffffff0d", border:"1px solid #0d2030", borderRadius:6, color:"#4a7090", cursor:"pointer", fontFamily:"inherit", fontSize:12 }}>キャンセル</button>
+                  <button onClick={()=>setEditId(null)} style={{ padding:"6px 10px", background:"#ffffff0d", border:"1px solid #0d2030", borderRadius:6, color:"#7a90a8", cursor:"pointer", fontFamily:"inherit", fontSize:12 }}>キャンセル</button>
                 </div>
               </div>
-            ):item.memo?<div style={{ fontSize:11, color:"#4a7090", borderTop:"1px solid #0d2030", paddingTop:8, lineHeight:1.5 }}>📝 {item.memo}</div>:null}
+            ):item.memo?<div style={{ fontSize:11, color:"#7a90a8", borderTop:"1px solid #0d2030", paddingTop:8, lineHeight:1.5 }}>📝 {item.memo}</div>:null}
           </div>
         ))
       }
@@ -1436,7 +1436,7 @@ function TechnicalTab() {
     setLoading(false);
   }
 
-  const sigC = {"過熱":"#ff4d6d","中立":"#ffd700","底値":"#00e5a0","買い":"#00e5a0","売り":"#ff4d6d","ゴールデン":"#00e5a0","デッド":"#ff4d6d","なし":"#4a7090"};
+  const sigC = {"過熱":"#ff4d6d","中立":"#ffd700","底値":"#00e5a0","買い":"#00e5a0","売り":"#ff4d6d","ゴールデン":"#00e5a0","デッド":"#ff4d6d","なし":"#7a90a8"};
 
   function DataBadge() {
     if (!realData) return null;
@@ -1470,27 +1470,27 @@ function TechnicalTab() {
             <div style={{ background:"#04090f", border:"1px solid #a78bfa30", borderRadius:8, padding:"10px 12px", marginBottom:12 }}>
               <div style={{ fontSize:9, color:"#a78bfa", letterSpacing:2, marginBottom:8 }}>📡 取得済みリアルタイムデータ</div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
-                {realData.price  && <div><span style={{ fontSize:9, color:"#4a7090" }}>現在価格: </span><span style={{ fontSize:12, color:"#e8f4ff", fontWeight:700 }}>${parseFloat(realData.price).toFixed(2)}</span></div>}
-                {realData.rsi    && <div><span style={{ fontSize:9, color:"#4a7090" }}>RSI(14): </span><span style={{ fontSize:12, color:"#ffd700", fontWeight:700 }}>{realData.rsi}</span></div>}
-                {realData.sma50  && <div><span style={{ fontSize:9, color:"#4a7090" }}>SMA50: </span><span style={{ fontSize:12, color:"#00c9ff", fontWeight:700 }}>${realData.sma50}</span></div>}
-                {realData.sma200 && <div><span style={{ fontSize:9, color:"#4a7090" }}>SMA200: </span><span style={{ fontSize:12, color:"#00c9ff", fontWeight:700 }}>${realData.sma200}</span></div>}
+                {realData.price  && <div><span style={{ fontSize:9, color:"#7a90a8" }}>現在価格: </span><span style={{ fontSize:12, color:"#e8f4ff", fontWeight:700 }}>${parseFloat(realData.price).toFixed(2)}</span></div>}
+                {realData.rsi    && <div><span style={{ fontSize:9, color:"#7a90a8" }}>RSI(14): </span><span style={{ fontSize:12, color:"#ffd700", fontWeight:700 }}>{realData.rsi}</span></div>}
+                {realData.sma50  && <div><span style={{ fontSize:9, color:"#7a90a8" }}>SMA50: </span><span style={{ fontSize:12, color:"#00c9ff", fontWeight:700 }}>${realData.sma50}</span></div>}
+                {realData.sma200 && <div><span style={{ fontSize:9, color:"#7a90a8" }}>SMA200: </span><span style={{ fontSize:12, color:"#00c9ff", fontWeight:700 }}>${realData.sma200}</span></div>}
                 {realData.macd && (
                   <div style={{ gridColumn:"span 2" }}>
-                    <span style={{ fontSize:9, color:"#4a7090" }}>MACD: </span>
+                    <span style={{ fontSize:9, color:"#7a90a8" }}>MACD: </span>
                     <span style={{ fontSize:11, color:"#ff6b35", fontWeight:700 }}>{parseFloat(realData.macd.macd).toFixed(3)}</span>
-                    <span style={{ fontSize:9, color:"#4a7090" }}> Sig: </span>
+                    <span style={{ fontSize:9, color:"#7a90a8" }}> Sig: </span>
                     <span style={{ fontSize:11, color:"#ff6b35", fontWeight:700 }}>{parseFloat(realData.macd.macd_signal).toFixed(3)}</span>
-                    <span style={{ fontSize:9, color:"#4a7090" }}> Hist: </span>
+                    <span style={{ fontSize:9, color:"#7a90a8" }}> Hist: </span>
                     <span style={{ fontSize:11, color:parseFloat(realData.macd.macd_hist)>=0?"#00e5a0":"#ff4d6d", fontWeight:700 }}>{parseFloat(realData.macd.macd_hist).toFixed(3)}</span>
                   </div>
                 )}
                 {realData.bbands && (
                   <div style={{ gridColumn:"span 2" }}>
-                    <span style={{ fontSize:9, color:"#4a7090" }}>BB上: </span>
+                    <span style={{ fontSize:9, color:"#7a90a8" }}>BB上: </span>
                     <span style={{ fontSize:11, color:"#ff4d6d", fontWeight:700 }}>${parseFloat(realData.bbands.upper_band).toFixed(2)}</span>
-                    <span style={{ fontSize:9, color:"#4a7090" }}> 中: </span>
+                    <span style={{ fontSize:9, color:"#7a90a8" }}> 中: </span>
                     <span style={{ fontSize:11, color:"#ffd700", fontWeight:700 }}>${parseFloat(realData.bbands.middle_band).toFixed(2)}</span>
-                    <span style={{ fontSize:9, color:"#4a7090" }}> 下: </span>
+                    <span style={{ fontSize:9, color:"#7a90a8" }}> 下: </span>
                     <span style={{ fontSize:11, color:"#00e5a0", fontWeight:700 }}>${parseFloat(realData.bbands.lower_band).toFixed(2)}</span>
                   </div>
                 )}
@@ -1568,7 +1568,7 @@ function TechnicalTab() {
             <div style={{ display:"flex", justifyContent:"space-between", fontSize:9, color:C.muted, marginBottom:8 }}>
               <span style={{ color:C.success }}>0 売られすぎ</span><span>30</span><span>50</span><span>70</span><span style={{ color:C.danger }}>100 買われすぎ</span>
             </div>
-            <div style={{ fontSize:11, color:"#6090a8", lineHeight:1.6 }}>{result.rsi?.comment}</div>
+            <div style={{ fontSize:11, color:"#8aaac0", lineHeight:1.6 }}>{result.rsi?.comment}</div>
           </div>
 
           {/* ── MACD + MA クロス ── */}
@@ -1585,7 +1585,7 @@ function TechnicalTab() {
                     <div style={{ width:10, height:10, borderRadius:"50%", background:sc, boxShadow:`0 0 6px ${sc}` }}/>
                     <div style={{ fontSize:15, fontWeight:900, color:sc }}>{signal}</div>
                   </div>
-                  <div style={{ fontSize:10, color:"#507090", lineHeight:1.5 }}>{comment}</div>
+                  <div style={{ fontSize:10, color:"#7a90a8", lineHeight:1.5 }}>{comment}</div>
                 </div>
               );
             })}
@@ -1725,11 +1725,11 @@ function FundamentalTab() {
           </div>
           {/* Competitors table */}
           <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"12px 14px", marginBottom:10 }}>
-            <div style={{ fontSize:9, color:"#4a7090", letterSpacing:2, marginBottom:10 }}>⚖ 競合比較</div>
+            <div style={{ fontSize:9, color:"#7a90a8", letterSpacing:2, marginBottom:10 }}>⚖ 競合比較</div>
             <div style={{ overflowX:"auto" }}>
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
                 <thead>
-                  <tr>{["銘柄","PER","PBR","ROE","成長率","判定"].map(h=><th key={h} style={{ textAlign:"center", color:"#3a5570", fontSize:9, paddingBottom:8, borderBottom:"1px solid #0d2030", paddingRight:4 }}>{h}</th>)}</tr>
+                  <tr>{["銘柄","PER","PBR","ROE","成長率","判定"].map(h=><th key={h} style={{ textAlign:"center", color:"#888888", fontSize:9, paddingBottom:8, borderBottom:"1px solid #0d2030", paddingRight:4 }}>{h}</th>)}</tr>
                 </thead>
                 <tbody>
                   <tr>
@@ -1913,7 +1913,7 @@ function StrategyTab() {
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
           {[["ticker","銘柄ティッカー (任意)"],["monthly","月額投資額 (円)"],["years","投資期間 (年)"],["rate","想定年率リターン (%)"]].map(([key,ph])=>(
             <div key={key}>
-              <div style={{ fontSize:9, color:"#4a7090", marginBottom:3 }}>{ph}</div>
+              <div style={{ fontSize:9, color:"#7a90a8", marginBottom:3 }}>{ph}</div>
               <input type={key==="ticker"?"text":"number"} value={dcaForm[key]} onChange={e=>setDcaForm(f=>({...f,[key]:key==="ticker"?e.target.value.toUpperCase():+e.target.value}))}
                 style={{ width:"100%", background:"#04090f", border:"1px solid #0d2535", borderRadius:6, padding:"8px 10px", color:"#e8f4ff", fontFamily:"inherit", fontSize:12, outline:"none" }}/>
             </div>
@@ -1923,14 +1923,14 @@ function StrategyTab() {
         {dcaResult&&(
           <div style={{ animation:"fadeIn .3s ease" }}>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:12 }}>
-              {[{label:"投資総額",val:`¥${Math.round(dcaResult.invested).toLocaleString()}`,c:"#4a7090"},{label:"推定最終資産",val:`¥${Math.round(dcaResult.fv).toLocaleString()}`,c:"#00c9ff"},{label:"推定利益",val:`¥${Math.round(dcaResult.profit).toLocaleString()}`,c:"#00e5a0"}].map(({label,val,c})=>(
+              {[{label:"投資総額",val:`¥${Math.round(dcaResult.invested).toLocaleString()}`,c:"#7a90a8"},{label:"推定最終資産",val:`¥${Math.round(dcaResult.fv).toLocaleString()}`,c:"#00c9ff"},{label:"推定利益",val:`¥${Math.round(dcaResult.profit).toLocaleString()}`,c:"#00e5a0"}].map(({label,val,c})=>(
                 <div key={label} style={{ textAlign:"center", background:"#04090f", borderRadius:8, padding:"8px 6px" }}>
-                  <div style={{ fontSize:9, color:"#4a7090", marginBottom:4 }}>{label}</div>
+                  <div style={{ fontSize:9, color:"#7a90a8", marginBottom:4 }}>{label}</div>
                   <div style={{ fontSize:12, fontWeight:900, color:c }}>{val}</div>
                 </div>
               ))}
             </div>
-            <div style={{ marginBottom:4, display:"flex", justifyContent:"space-between", fontSize:10, color:"#4a7090" }}>
+            <div style={{ marginBottom:4, display:"flex", justifyContent:"space-between", fontSize:10, color:"#7a90a8" }}>
               <span>年別資産推移</span>
               <span style={{ color:"#00e5a0", fontWeight:700 }}>利益率 +{((dcaResult.profit/dcaResult.invested)*100).toFixed(1)}%</span>
             </div>
@@ -1945,14 +1945,14 @@ function StrategyTab() {
                 );
               })}
             </div>
-            <div style={{ display:"flex", justifyContent:"space-between", fontSize:9, color:"#4a7090", marginTop:3, marginBottom:8 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", fontSize:9, color:"#7a90a8", marginTop:3, marginBottom:8 }}>
               <span>1年</span><span>{Math.round(dcaForm.years/2)}年</span><span>{dcaForm.years}年</span>
             </div>
-            <div style={{ display:"flex", gap:12, fontSize:9, color:"#4a7090", marginBottom:12 }}>
+            <div style={{ display:"flex", gap:12, fontSize:9, color:"#7a90a8", marginBottom:12 }}>
               <span><span style={{ display:"inline-block", width:10, height:10, background:"#00c9ff55", marginRight:4, verticalAlign:"middle" }}></span>投資額</span>
               <span><span style={{ display:"inline-block", width:10, height:10, background:"#00e5a0", marginRight:4, verticalAlign:"middle" }}></span>運用益</span>
             </div>
-            {!dcaAI&&<button onClick={getDcaAI} disabled={dcaAILoading} style={{ width:"100%", padding:"8px", background:"#a78bfa15", border:"1px solid #a78bfa40", borderRadius:6, color:dcaAILoading?"#4a7090":"#a78bfa", cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:700 }}>{dcaAILoading?"AI評価を取得中...":"🤖 AI評価を取得"}</button>}
+            {!dcaAI&&<button onClick={getDcaAI} disabled={dcaAILoading} style={{ width:"100%", padding:"8px", background:"#a78bfa15", border:"1px solid #a78bfa40", borderRadius:6, color:dcaAILoading?"#7a90a8":"#a78bfa", cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:700 }}>{dcaAILoading?"AI評価を取得中...":"🤖 AI評価を取得"}</button>}
             {dcaAI&&(
               <div style={{ background:"#06111a", border:"1px solid #0d2535", borderRadius:8, padding:"10px 12px" }}>
                 <div style={{ display:"flex", gap:8, marginBottom:8 }}>
@@ -1970,8 +1970,8 @@ function StrategyTab() {
       {/* Tool 2: Risk Checker */}
       <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:12, padding:"14px 16px", marginBottom:12 }}>
         <div style={{ fontSize:13, fontWeight:700, color:"#ff6b35", marginBottom:12 }}>⚖ リスク分散チェッカー</div>
-        <div style={{ fontSize:11, color:"#4a7090", marginBottom:12 }}>ポートフォリオタブの保有銘柄を自動読み込みして分析します</div>
-        <button onClick={runRiskCheck} disabled={riskLoading} style={{ width:"100%", padding:"10px", background:riskLoading?"#0d2535":"#ff6b3522", border:`1px solid ${riskLoading?"#0d2535":"#ff6b3555"}`, borderRadius:8, color:riskLoading?"#4a7090":"#ff6b35", cursor:riskLoading?"not-allowed":"pointer", fontFamily:"inherit", fontSize:13, fontWeight:700, marginBottom:12 }}>{riskLoading?"分析中...":"🔍 分散チェックを実行"}</button>
+        <div style={{ fontSize:11, color:"#7a90a8", marginBottom:12 }}>ポートフォリオタブの保有銘柄を自動読み込みして分析します</div>
+        <button onClick={runRiskCheck} disabled={riskLoading} style={{ width:"100%", padding:"10px", background:riskLoading?"#0d2535":"#ff6b3522", border:`1px solid ${riskLoading?"#0d2535":"#ff6b3555"}`, borderRadius:8, color:riskLoading?"#7a90a8":"#ff6b35", cursor:riskLoading?"not-allowed":"pointer", fontFamily:"inherit", fontSize:13, fontWeight:700, marginBottom:12 }}>{riskLoading?"分析中...":"🔍 分散チェックを実行"}</button>
         {riskLoading&&<LoadingDots color="#ff6b35" phases={phases3} phase={riskPhase}/>}
         {riskError&&<ErrBox msg={riskError} onRetry={runRiskCheck}/>}
         {riskResult&&!riskLoading&&(
@@ -1985,14 +1985,14 @@ function StrategyTab() {
                   <div key={i} style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
                     <div style={{ width:10, height:10, borderRadius:2, background:PIE_COLORS[i%PIE_COLORS.length], flexShrink:0 }}/>
                     <span style={{ fontSize:11, color:"#e8f4ff", flex:1 }}>{s.name}</span>
-                    <span style={{ fontSize:11, color:"#4a7090" }}>{s.percentage}%</span>
+                    <span style={{ fontSize:11, color:"#7a90a8" }}>{s.percentage}%</span>
                   </div>
                 ))}
               </div>
             </div>
             <div style={{ background:"#04090f", border:"1px solid #0d2030", borderRadius:8, padding:"10px 12px", marginBottom:8 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:"#4a7090" }}>分散スコア</span><InfoBtn id="diversification_score"/></div>
+                <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:"#7a90a8" }}>分散スコア</span><InfoBtn id="diversification_score"/></div>
                 <span style={{ fontSize:20, fontWeight:900, color:riskResult.diversification_score>=70?"#00e5a0":riskResult.diversification_score>=40?"#ffd700":"#ff4d6d" }}>{riskResult.diversification_score}/100</span>
               </div>
               <ScoreBar value={riskResult.diversification_score} color={riskResult.diversification_score>=70?"#00e5a0":riskResult.diversification_score>=40?"#ffd700":"#ff4d6d"}/>
@@ -2029,8 +2029,8 @@ function StrategyTab() {
       {/* Tool 3: Scenario */}
       <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:12, padding:"14px 16px", marginBottom:8 }}>
         <div style={{ fontSize:13, fontWeight:700, color:"#a78bfa", marginBottom:12 }}>🧪 シナリオ分析</div>
-        <div style={{ fontSize:11, color:"#4a7090", marginBottom:12 }}>4つのシナリオでポートフォリオへの影響を推計します</div>
-        <button onClick={runScenario} disabled={scenLoading} style={{ width:"100%", padding:"10px", background:scenLoading?"#0d2535":"#a78bfa22", border:`1px solid ${scenLoading?"#0d2535":"#a78bfa55"}`, borderRadius:8, color:scenLoading?"#4a7090":"#a78bfa", cursor:scenLoading?"not-allowed":"pointer", fontFamily:"inherit", fontSize:13, fontWeight:700, marginBottom:12 }}>{scenLoading?"分析中...":"🚀 シナリオ分析を実行"}</button>
+        <div style={{ fontSize:11, color:"#7a90a8", marginBottom:12 }}>4つのシナリオでポートフォリオへの影響を推計します</div>
+        <button onClick={runScenario} disabled={scenLoading} style={{ width:"100%", padding:"10px", background:scenLoading?"#0d2535":"#a78bfa22", border:`1px solid ${scenLoading?"#0d2535":"#a78bfa55"}`, borderRadius:8, color:scenLoading?"#7a90a8":"#a78bfa", cursor:scenLoading?"not-allowed":"pointer", fontFamily:"inherit", fontSize:13, fontWeight:700, marginBottom:12 }}>{scenLoading?"分析中...":"🚀 シナリオ分析を実行"}</button>
         {scenLoading&&<LoadingDots color="#a78bfa" phases={phases3} phase={scenPhase}/>}
         {scenError&&<ErrBox msg={scenError} onRetry={runScenario}/>}
         {scenResult&&!scenLoading&&(
@@ -2063,7 +2063,7 @@ function StrategyTab() {
                   <div style={{ display:"flex", justifyContent:"space-between", fontSize:8, color:C.muted, marginBottom:8 }}>
                     <span>最大損失</span><span>±0%</span><span>最大利益</span>
                   </div>
-                  <div style={{ fontSize:10, color:"#507090", lineHeight:1.5 }}>{s.comment}</div>
+                  <div style={{ fontSize:10, color:"#7a90a8", lineHeight:1.5 }}>{s.comment}</div>
                 </div>
               );
             })}
@@ -2101,7 +2101,7 @@ function NewsSentimentPanel() {
         <div style={{ animation:"fadeIn .3s ease" }}>
           <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:12, padding:"14px 16px", marginBottom:12 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:"#4a7090" }}>総合センチメントスコア</span><InfoBtn id="sentiment_score"/></div>
+              <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:"#7a90a8" }}>総合センチメントスコア</span><InfoBtn id="sentiment_score"/></div>
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                 <span style={{ fontSize:22, fontWeight:900, color:verdictC[result.verdict]||"#ffd700" }}>{result.overall_score>0?"+":""}{result.overall_score}</span>
                 <span style={{ fontSize:11, padding:"3px 10px", background:`${verdictC[result.verdict]||"#ffd700"}22`, color:verdictC[result.verdict]||"#ffd700", borderRadius:8, border:`1px solid ${verdictC[result.verdict]||"#ffd700"}44` }}>{result.verdict}</span>
@@ -2110,7 +2110,7 @@ function NewsSentimentPanel() {
             <div style={{ position:"relative", height:10, background:"linear-gradient(90deg,#ff4d6d 0%,#ffd700 50%,#00e5a0 100%)", borderRadius:5, marginBottom:6 }}>
               <div style={{ position:"absolute", top:-3, left:`${Math.min(99,Math.max(1,(result.overall_score+100)/2))}%`, width:16, height:16, borderRadius:"50%", background:"#fff", border:"2px solid #060e17", transform:"translateX(-50%)", boxShadow:`0 0 6px ${verdictC[result.verdict]||"#ffd700"}` }}/>
             </div>
-            <div style={{ display:"flex", justifyContent:"space-between", fontSize:9, color:"#4a7090" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", fontSize:9, color:"#7a90a8" }}>
               <span>-100 弱気</span><span>0 中立</span><span>+100 強気</span>
             </div>
           </div>
@@ -2124,8 +2124,8 @@ function NewsSentimentPanel() {
                       <span style={{ fontSize:12, fontWeight:700, color:"#e8f4ff", lineHeight:1.4 }}>{n.title}</span>
                       <span style={{ fontSize:10, color:n.score>20?"#00e5a0":n.score<-20?"#ff4d6d":"#ffd700", fontWeight:700, flexShrink:0, marginLeft:8 }}>{n.score>0?"+":""}{n.score}</span>
                     </div>
-                    <div style={{ fontSize:9, color:"#3a5570", marginBottom:4 }}>{n.date}</div>
-                    <div style={{ fontSize:11, color:"#6090a8", lineHeight:1.5 }}>{n.summary}</div>
+                    <div style={{ fontSize:9, color:"#888888", marginBottom:4 }}>{n.date}</div>
+                    <div style={{ fontSize:11, color:"#8aaac0", lineHeight:1.5 }}>{n.summary}</div>
                   </div>
                 </div>
                 <div style={{ marginTop:8, height:3, background:"#0d2030", borderRadius:2 }}>
@@ -2145,7 +2145,7 @@ function NewsSentimentPanel() {
             </div>
           </div>
           <div style={{ textAlign:"center", padding:14, background:`${verdictC[result.verdict]||"#ffd700"}15`, border:`1px solid ${verdictC[result.verdict]||"#ffd700"}40`, borderRadius:10 }}>
-            <div style={{ fontSize:9, color:"#4a7090", marginBottom:4 }}>総合判定</div>
+            <div style={{ fontSize:9, color:"#7a90a8", marginBottom:4 }}>総合判定</div>
             <div style={{ fontSize:18, fontWeight:900, color:verdictC[result.verdict]||"#ffd700" }}>{result.verdict}</div>
           </div>
         </div>
@@ -2179,23 +2179,23 @@ function InsiderPanel() {
       {result && !loading && (
         <div style={{ animation:"fadeIn .3s ease" }}>
           <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:12, padding:"14px 16px", marginBottom:12 }}>
-            <div style={{ fontSize:9, color:"#4a7090", letterSpacing:2, marginBottom:12 }}>直近3ヶ月 インサイダー取引</div>
+            <div style={{ fontSize:9, color:"#7a90a8", letterSpacing:2, marginBottom:12 }}>直近3ヶ月 インサイダー取引</div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:12 }}>
               {[{label:"買い件数",value:result.buy_count,color:"#00e5a0"},{label:"売り件数",value:result.sell_count,color:"#ff4d6d"},{label:"買い比率",value:`${result.buy_ratio}%`,color:result.buy_ratio>=60?"#00e5a0":result.buy_ratio>=40?"#ffd700":"#ff4d6d"}].map(({label,value,color})=>(
                 <div key={label} style={{ textAlign:"center", background:"#04090f", borderRadius:8, padding:"10px 6px" }}>
-                  <div style={{ fontSize:9, color:"#4a7090", marginBottom:4 }}>{label}</div>
+                  <div style={{ fontSize:9, color:"#7a90a8", marginBottom:4 }}>{label}</div>
                   <div style={{ fontSize:20, fontWeight:900, color }}>{value}</div>
                 </div>
               ))}
             </div>
-            <div style={{ marginBottom:4, display:"flex", justifyContent:"space-between", fontSize:9, color:"#4a7090" }}>
+            <div style={{ marginBottom:4, display:"flex", justifyContent:"space-between", fontSize:9, color:"#7a90a8" }}>
               <span>買い比率</span>
               <span style={{ color:result.buy_ratio>=60?"#00e5a0":result.buy_ratio>=40?"#ffd700":"#ff4d6d", fontWeight:700 }}>{result.buy_ratio}%</span>
             </div>
             <div style={{ height:8, background:"#ff4d6d44", borderRadius:4, overflow:"hidden", marginBottom:4 }}>
               <div style={{ height:"100%", width:`${result.buy_ratio}%`, background:result.buy_ratio>=60?"#00e5a0":result.buy_ratio>=40?"#ffd700":"#ff4d6d", borderRadius:4, transition:"width .6s ease" }}/>
             </div>
-            <div style={{ display:"flex", justifyContent:"space-between", fontSize:9, color:"#4a7090" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", fontSize:9, color:"#7a90a8" }}>
               <span>← 売り優勢</span><span>買い優勢 →</span>
             </div>
           </div>
@@ -2209,20 +2209,20 @@ function InsiderPanel() {
                     <span style={{ fontSize:12, color:"#e8f4ff", fontWeight:700 }}>{n.role}</span>
                     <span style={{ fontSize:12, color:n.type==="買い"?"#00e5a0":"#ff4d6d", fontWeight:700 }}>{n.amount}</span>
                   </div>
-                  <div style={{ fontSize:10, color:"#507090", lineHeight:1.5, marginTop:3 }}>{n.meaning}</div>
+                  <div style={{ fontSize:10, color:"#7a90a8", lineHeight:1.5, marginTop:3 }}>{n.meaning}</div>
                 </div>
               </div>
             ))}
           </div>
           <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"12px 14px", marginBottom:12 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:"#4a7090" }}>インサイダー信頼度スコア</span><InfoBtn id="insider_confidence"/></div>
+              <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:"#7a90a8" }}>インサイダー信頼度スコア</span><InfoBtn id="insider_confidence"/></div>
               <span style={{ fontSize:20, fontWeight:900, color:result.confidence_score>=70?"#00e5a0":result.confidence_score>=40?"#ffd700":"#ff4d6d" }}>{result.confidence_score}<span style={{ fontSize:11 }}>/100</span></span>
             </div>
             <ScoreBar value={result.confidence_score} color={result.confidence_score>=70?"#00e5a0":result.confidence_score>=40?"#ffd700":"#ff4d6d"}/>
           </div>
           <div style={{ textAlign:"center", padding:14, background:`${verdictC[result.verdict]||"#ffd700"}15`, border:`1px solid ${verdictC[result.verdict]||"#ffd700"}40`, borderRadius:10 }}>
-            <div style={{ fontSize:9, color:"#4a7090", marginBottom:4 }}>判定</div>
+            <div style={{ fontSize:9, color:"#7a90a8", marginBottom:4 }}>判定</div>
             <div style={{ fontSize:18, fontWeight:900, color:verdictC[result.verdict]||"#ffd700" }}>{result.verdict}</div>
           </div>
         </div>
@@ -2260,23 +2260,23 @@ function ShortPanel() {
           <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:12, padding:"14px 16px", marginBottom:12 }}>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
               <div style={{ textAlign:"center", background:"#04090f", borderRadius:8, padding:"12px 8px" }}>
-                <div style={{ fontSize:9, color:"#4a7090", marginBottom:4 }}>空売り比率（推定）</div>
+                <div style={{ fontSize:9, color:"#7a90a8", marginBottom:4 }}>空売り比率（推定）</div>
                 <div style={{ fontSize:24, fontWeight:900, color:verdictC[result.verdict]||"#ffd700" }}>{result.short_ratio}</div>
               </div>
               <div style={{ textAlign:"center", background:"#04090f", borderRadius:8, padding:"12px 8px" }}>
-                <div style={{ fontSize:9, color:"#4a7090", marginBottom:4 }}>トレンド</div>
+                <div style={{ fontSize:9, color:"#7a90a8", marginBottom:4 }}>トレンド</div>
                 <div style={{ fontSize:18, fontWeight:900, color:trendC[result.trend]||"#ffd700" }}>{trendI[result.trend]||"→"} {result.trend}</div>
               </div>
             </div>
-            <div style={{ fontSize:11, color:"#6090a8", lineHeight:1.5, textAlign:"center" }}>{result.meaning}</div>
+            <div style={{ fontSize:11, color:"#8aaac0", lineHeight:1.5, textAlign:"center" }}>{result.meaning}</div>
           </div>
           <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"12px 14px", marginBottom:12 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:"#4a7090" }}>🔥 スクイーズポテンシャル</span><InfoBtn id="squeeze_potential"/></div>
+              <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:"#7a90a8" }}>🔥 スクイーズポテンシャル</span><InfoBtn id="squeeze_potential"/></div>
               <span style={{ fontSize:20, fontWeight:900, color:result.squeeze_potential>=70?"#ff6b35":result.squeeze_potential>=40?"#ffd700":"#00e5a0" }}>{result.squeeze_potential}<span style={{ fontSize:11 }}>/100</span></span>
             </div>
             <ScoreBar value={result.squeeze_potential} color={result.squeeze_potential>=70?"#ff6b35":result.squeeze_potential>=40?"#ffd700":"#00e5a0"}/>
-            <div style={{ display:"flex", justifyContent:"space-between", fontSize:9, color:"#4a7090", marginTop:4 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", fontSize:9, color:"#7a90a8", marginTop:4 }}>
               <span>低（安全）</span><span>高（スクイーズ注意）</span>
             </div>
           </div>
@@ -2287,7 +2287,7 @@ function ShortPanel() {
             </div>
           )}
           <div style={{ textAlign:"center", padding:14, background:`${verdictC[result.verdict]||"#ffd700"}15`, border:`1px solid ${verdictC[result.verdict]||"#ffd700"}40`, borderRadius:10 }}>
-            <div style={{ fontSize:9, color:"#4a7090", marginBottom:4 }}>判定</div>
+            <div style={{ fontSize:9, color:"#7a90a8", marginBottom:4 }}>判定</div>
             <div style={{ fontSize:18, fontWeight:900, color:verdictC[result.verdict]||"#ffd700" }}>{result.verdict}</div>
           </div>
         </div>
@@ -2327,11 +2327,11 @@ function EarningsPanel() {
             <div style={{ fontSize:16, fontWeight:900, color:"#e8f4ff" }}>{result.next_earnings}</div>
           </div>
           <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"12px 14px", marginBottom:12 }}>
-            <div style={{ fontSize:9, color:"#4a7090", letterSpacing:2, marginBottom:10 }}>📈 過去4回の決算サプライズ</div>
+            <div style={{ fontSize:9, color:"#7a90a8", letterSpacing:2, marginBottom:10 }}>📈 過去4回の決算サプライズ</div>
             <div style={{ overflowX:"auto" }}>
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
                 <thead>
-                  <tr>{["四半期","EPS予想","EPS実績","サプライズ"].map(h=><th key={h} style={{ textAlign:"center", color:"#3a5570", fontSize:9, paddingBottom:8, borderBottom:"1px solid #0d2030", paddingRight:4 }}>{h}</th>)}</tr>
+                  <tr>{["四半期","EPS予想","EPS実績","サプライズ"].map(h=><th key={h} style={{ textAlign:"center", color:"#888888", fontSize:9, paddingBottom:8, borderBottom:"1px solid #0d2030", paddingRight:4 }}>{h}</th>)}</tr>
                 </thead>
                 <tbody>
                   {(result.past_surprises||[]).map((s,i)=>{
@@ -2354,14 +2354,14 @@ function EarningsPanel() {
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:12 }}>
             {[{label:"サプライズ予測",value:result.surprise_prediction,colorMap:predC},{label:"株価反応予測",value:result.price_reaction,colorMap:reactC},{label:"決算トレード推奨",value:result.trade_recommendation,colorMap:tradeC}].map(({label,value,colorMap})=>(
               <div key={label} style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:8, padding:"10px 8px", textAlign:"center" }}>
-                <div style={{ fontSize:9, color:"#4a7090", marginBottom:6 }}>{label}</div>
+                <div style={{ fontSize:9, color:"#7a90a8", marginBottom:6 }}>{label}</div>
                 <div style={{ fontSize:11, fontWeight:900, color:colorMap[value]||"#ffd700" }}>{value}</div>
               </div>
             ))}
           </div>
           <div style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"12px 14px" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:"#4a7090" }}>サプライズスコア</span><InfoBtn id="surprise_score"/></div>
+              <div style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ fontSize:11, color:"#7a90a8" }}>サプライズスコア</span><InfoBtn id="surprise_score"/></div>
               <span style={{ fontSize:20, fontWeight:900, color:result.surprise_score>=70?"#00e5a0":result.surprise_score>=40?"#ffd700":"#ff4d6d" }}>{result.surprise_score}<span style={{ fontSize:11 }}>/100</span></span>
             </div>
             <ScoreBar value={result.surprise_score} color={result.surprise_score>=70?"#00e5a0":result.surprise_score>=40?"#ffd700":"#ff4d6d"}/>
@@ -2388,7 +2388,7 @@ function InfoCenterTab() {
         <div style={{ display:"flex", gap:2, padding:"0 16px", minWidth:"max-content" }}>
           {SUB_TABS.map(st=>(
             <button key={st.key} onClick={()=>setSubTab(st.key)}
-              style={{ flexShrink:0, padding:"10px 10px", background:subTab===st.key?`${st.color}18`:"transparent", border:`1px solid ${subTab===st.key?st.color+"55":"#0d2030"}`, borderBottom:"none", borderRadius:"8px 8px 0 0", color:subTab===st.key?st.color:"#3a5570", cursor:"pointer", fontFamily:"inherit", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>
+              style={{ flexShrink:0, padding:"10px 10px", background:subTab===st.key?`${st.color}18`:"transparent", border:`1px solid ${subTab===st.key?st.color+"55":"#0d2030"}`, borderBottom:"none", borderRadius:"8px 8px 0 0", color:subTab===st.key?st.color:"#888888", cursor:"pointer", fontFamily:"inherit", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>
               {st.icon} {st.label}
             </button>
           ))}
@@ -2489,11 +2489,11 @@ function AlertTab() {
 
   const card  = { background: "#080f1a", border: "1px solid #0d2030", borderRadius: 12, padding: 16, marginBottom: 12 };
   const input = { width: "100%", padding: "10px 12px", background: "#04090f", border: "1px solid #0d2030", borderRadius: 8, color: "#eaf4ff", fontFamily: "inherit", fontSize: 14, outline: "none" };
-  const lbl   = { fontSize: 11, color: "#4a7090", marginBottom: 4, display: "block" };
+  const lbl   = { fontSize: 11, color: "#7a90a8", marginBottom: 4, display: "block" };
 
   return (
     <div style={{ padding: "16px 16px 100px" }}>
-      <div style={{ fontSize: 11, color: "#4a7090", letterSpacing: 2, marginBottom: 16 }}>🔔 株価アラート</div>
+      <div style={{ fontSize: 11, color: "#7a90a8", letterSpacing: 2, marginBottom: 16 }}>🔔 株価アラート</div>
 
       {/* Email */}
       <div style={card}>
@@ -2524,7 +2524,7 @@ function AlertTab() {
           <div style={{ display: "flex", gap: 8 }}>
             {[{ v: "above", label: "📈 以上になったら" }, { v: "below", label: "📉 以下になったら" }].map(d => (
               <button key={d.v} onClick={() => setDirection(d.v)}
-                style={{ flex: 1, padding: "8px 0", background: direction === d.v ? "#00c9ff22" : "transparent", border: `1px solid ${direction === d.v ? "#00c9ff" : "#0d2030"}`, borderRadius: 8, color: direction === d.v ? "#00c9ff" : "#2a4560", cursor: "pointer", fontFamily: "inherit", fontSize: 12 }}>
+                style={{ flex: 1, padding: "8px 0", background: direction === d.v ? "#00c9ff22" : "transparent", border: `1px solid ${direction === d.v ? "#00c9ff" : "#0d2030"}`, borderRadius: 8, color: direction === d.v ? "#00c9ff" : "#556677", cursor: "pointer", fontFamily: "inherit", fontSize: 12 }}>
                 {d.label}
               </button>
             ))}
@@ -2545,7 +2545,7 @@ function AlertTab() {
 
       {/* Alert list */}
       {loading
-        ? <div style={{ textAlign: "center", color: "#2a4560", fontSize: 13, padding: 24 }}>読み込み中...</div>
+        ? <div style={{ textAlign: "center", color: "#556677", fontSize: 13, padding: 24 }}>読み込み中...</div>
         : alerts.length > 0 && (
           <div style={card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -2559,20 +2559,20 @@ function AlertTab() {
               <div key={a.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: i < alerts.length - 1 ? "1px solid #0d2030" : "none" }}>
                 <div>
                   <span style={{ fontWeight: 700, color: "#eaf4ff", marginRight: 8 }}>{a.ticker}</span>
-                  <span style={{ fontSize: 12, color: "#4a7090" }}>
+                  <span style={{ fontSize: 12, color: "#7a90a8" }}>
                     {a.direction === "above" ? "📈" : "📉"} ${a.targetPrice} {a.direction === "above" ? "以上" : "以下"}
                   </span>
                   <div style={{ fontSize: 10, color: "#1a3040", marginTop: 2 }}>{a.email}</div>
                 </div>
                 <button onClick={() => deleteAlert(a.id)}
-                  style={{ background: "none", border: "none", color: "#2a4560", cursor: "pointer", fontSize: 18, padding: "0 4px", lineHeight: 1 }}>×</button>
+                  style={{ background: "none", border: "none", color: "#556677", cursor: "pointer", fontSize: 18, padding: "0 4px", lineHeight: 1 }}>×</button>
               </div>
             ))}
           </div>
         )
       }
 
-      <div style={{ fontSize: 11, color: "#2a4560", textAlign: "center", marginTop: 8 }}>
+      <div style={{ fontSize: 11, color: "#556677", textAlign: "center", marginTop: 8 }}>
         ※ アラートはVercel Blob に保存され、毎時サーバー側で自動チェックされます
       </div>
     </div>
@@ -2640,7 +2640,8 @@ export default function App() {
           @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
           .skeleton{background:linear-gradient(90deg,#0d1f2d 25%,#162840 50%,#0d1f2d 75%);background-size:200% 100%;animation:shimmer 1.5s infinite}
           @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
-          input::placeholder,textarea::placeholder{color:#253545}
+          input::placeholder,textarea::placeholder{color:#888888}
+          input:focus,textarea:focus{border-color:#00ffcc55!important;box-shadow:0 0 0 2px #00ffcc14;outline:none!important}
           *{box-sizing:border-box}
           .tabnav::-webkit-scrollbar{display:none}
         `}</style>
@@ -2678,9 +2679,9 @@ export default function App() {
         </div>
         <nav className="tabnav" style={{ position:"fixed", bottom:0, left:0, right:0, background:"#060e18", borderTop:"1px solid #0d2030", display:"flex", zIndex:50, overflowX:"auto", scrollbarWidth:"none", WebkitOverflowScrolling:"touch" }}>
           {TABS.map(t=>(
-            <button key={t.key} onClick={()=>setActiveTab(t.key)} style={{ minWidth:68, flexShrink:0, padding:"10px 4px 8px", background:"transparent", border:"none", borderTop:activeTab===t.key?"2px solid #00c9ff":"2px solid transparent", color:activeTab===t.key?"#00c9ff":"rgba(220,235,255,0.75)", cursor:"pointer", fontFamily:"inherit", display:"flex", flexDirection:"column", alignItems:"center", gap:3 }}>
+            <button key={t.key} onClick={()=>setActiveTab(t.key)} style={{ minWidth:68, flexShrink:0, padding:"10px 4px 8px", background:"transparent", border:"none", borderTop:activeTab===t.key?"2px solid #00ffcc":"2px solid transparent", color:activeTab===t.key?"#00ffcc":"#999999", cursor:"pointer", fontFamily:"inherit", display:"flex", flexDirection:"column", alignItems:"center", gap:3 }}>
               {t.img
-                ? <img src={t.img} alt={t.label} style={{ width:24, height:24, objectFit:"contain", opacity:activeTab===t.key?1:0.4 }}/>
+                ? <img src={t.img} alt={t.label} style={{ width:24, height:24, objectFit:"contain", opacity:activeTab===t.key?1:0.45 }}/>
                 : <span style={{ fontSize:18, opacity:activeTab===t.key?1:0.45 }}>{t.icon}</span>
               }
               <span style={{ fontSize:9, fontWeight:activeTab===t.key?700:400, whiteSpace:"nowrap" }}>{t.label}</span>
