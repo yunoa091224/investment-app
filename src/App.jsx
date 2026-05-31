@@ -1,5 +1,10 @@
 import { useState, useEffect, useRef, Component, createContext, useContext } from "react";
 import { jsonrepair } from 'jsonrepair';
+import rankingIcon from "./assets/ranking.webp";
+import analysisIcon from "./assets/analysis.webp";
+import technicalIcon from "./assets/technical.webp";
+import fundaIcon from "./assets/funda.webp";
+import strategyIcon from "./assets/strategy.webp";
 
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null }; }
@@ -2401,15 +2406,15 @@ function InfoCenterTab() {
 
 // ── TABS ──────────────────────────────────────────────────────
 const TABS = [
-  { key:"ranking",     icon:"📊", label:"ランキング" },
-  { key:"analysis",    icon:"🔍", label:"分析" },
-  { key:"portfolio",   icon:"💼", label:"ポートフォリオ" },
-  { key:"macro",       icon:"🌍", label:"マクロ" },
-  { key:"watch",       icon:"⭐", label:"ウォッチ" },
-  { key:"technical",   icon:"📉", label:"テクニカル" },
-  { key:"fundamental", icon:"📋", label:"ファンダ" },
-  { key:"strategy",    icon:"🧠", label:"戦略ツール" },
-  { key:"info",        icon:"🗞️", label:"情報センター" },
+  { key:"ranking",     img:rankingIcon,  label:"ランキング" },
+  { key:"analysis",    img:analysisIcon, label:"分析" },
+  { key:"portfolio",   icon:"💼",        label:"ポートフォリオ" },
+  { key:"macro",       icon:"🌍",        label:"マクロ" },
+  { key:"watch",       icon:"⭐",        label:"ウォッチ" },
+  { key:"technical",   img:technicalIcon, label:"テクニカル" },
+  { key:"fundamental", img:fundaIcon,    label:"ファンダ" },
+  { key:"strategy",    img:strategyIcon, label:"戦略ツール" },
+  { key:"info",        icon:"🗞️",       label:"情報センター" },
 ];
 
 // ── Main App ──────────────────────────────────────────────────
@@ -2497,7 +2502,10 @@ export default function App() {
         <nav className="tabnav" style={{ position:"fixed", bottom:0, left:0, right:0, background:"#060e18", borderTop:"1px solid #0d2030", display:"flex", zIndex:50, overflowX:"auto", scrollbarWidth:"none", WebkitOverflowScrolling:"touch" }}>
           {TABS.map(t=>(
             <button key={t.key} onClick={()=>setActiveTab(t.key)} style={{ minWidth:68, flexShrink:0, padding:"10px 4px 8px", background:"transparent", border:"none", borderTop:activeTab===t.key?"2px solid #00c9ff":"2px solid transparent", color:activeTab===t.key?"#00c9ff":"#2a4560", cursor:"pointer", fontFamily:"inherit", display:"flex", flexDirection:"column", alignItems:"center", gap:3 }}>
-              <span style={{ fontSize:18 }}>{t.icon}</span>
+              {t.img
+                ? <img src={t.img} alt={t.label} style={{ width:24, height:24, objectFit:"contain", opacity:activeTab===t.key?1:0.4 }}/>
+                : <span style={{ fontSize:18 }}>{t.icon}</span>
+              }
               <span style={{ fontSize:9, fontWeight:activeTab===t.key?700:400, whiteSpace:"nowrap" }}>{t.label}</span>
             </button>
           ))}
