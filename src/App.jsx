@@ -2678,10 +2678,10 @@ export default function App() {
         </div>
         <nav className="tabnav" style={{ position:"fixed", bottom:0, left:0, right:0, background:"#060e18", borderTop:"1px solid #0d2030", display:"flex", zIndex:50, overflowX:"auto", scrollbarWidth:"none", WebkitOverflowScrolling:"touch" }}>
           {TABS.map(t=>(
-            <button key={t.key} onClick={()=>setActiveTab(t.key)} style={{ minWidth:68, flexShrink:0, padding:"10px 4px 8px", background:"transparent", border:"none", borderTop:activeTab===t.key?"2px solid #00c9ff":"2px solid transparent", color:activeTab===t.key?"#00c9ff":"#2a4560", cursor:"pointer", fontFamily:"inherit", display:"flex", flexDirection:"column", alignItems:"center", gap:3 }}>
+            <button key={t.key} onClick={()=>setActiveTab(t.key)} style={{ minWidth:68, flexShrink:0, padding:"10px 4px 8px", background:"transparent", border:"none", borderTop:activeTab===t.key?"2px solid #00c9ff":"2px solid transparent", color:activeTab===t.key?"#00c9ff":"rgba(220,235,255,0.75)", cursor:"pointer", fontFamily:"inherit", display:"flex", flexDirection:"column", alignItems:"center", gap:3 }}>
               {t.img
                 ? <img src={t.img} alt={t.label} style={{ width:24, height:24, objectFit:"contain", opacity:activeTab===t.key?1:0.4 }}/>
-                : <span style={{ fontSize:18 }}>{t.icon}</span>
+                : <span style={{ fontSize:18, opacity:activeTab===t.key?1:0.45 }}>{t.icon}</span>
               }
               <span style={{ fontSize:9, fontWeight:activeTab===t.key?700:400, whiteSpace:"nowrap" }}>{t.label}</span>
             </button>
