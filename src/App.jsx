@@ -651,6 +651,51 @@ function DisclaimerModal({ onAccept }) {
   );
 }
 
+// ── WelcomeModal ─────────────────────────────────────────────
+function WelcomeModal({ onClose }) {
+  const steps = [
+    { icon:"🔍", num:"01", title:"銘柄を検索", desc:"米国株・日本株のティッカーを入力するだけ" },
+    { icon:"🤖", num:"02", title:"AIが3段階分析", desc:"ファンダ・テクニカル・総合を自動で深掘り" },
+    { icon:"🔔", num:"03", title:"アラート設定", desc:"目標株価に達したらメールで即通知" },
+  ];
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#000000e8", zIndex:10001, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 16px", animation:"fadeIn .3s ease" }}>
+      {/* グラデーションボーダー */}
+      <div style={{ background:"linear-gradient(135deg,#00c9ff55,#a78bfa55)", padding:1.5, borderRadius:22, maxWidth:420, width:"100%", boxShadow:"0 32px 80px #000000cc" }}>
+        <div style={{ background:"#09141e", borderRadius:21, padding:"32px 22px 24px" }}>
+          <div style={{ textAlign:"center", marginBottom:24 }}>
+            <div style={{ fontSize:36, marginBottom:10 }}>📊</div>
+            <div style={{ fontSize:22, fontWeight:900, color:"#eaf4ff", marginBottom:4 }}>Kabu.AIへようこそ！</div>
+            <div style={{ fontSize:12, color:"#7a90a8" }}>AI搭載の株式分析プラットフォーム</div>
+          </div>
+          {steps.map((s, i) => (
+            <div key={i} style={{ display:"flex", gap:12, alignItems:"flex-start", marginBottom:10, padding:"12px 14px", background:"#06111a", borderRadius:10, border:"1px solid #0d2535", animation:`fadeIn .4s ease ${i * 0.1}s both` }}>
+              <div style={{ fontSize:26, flexShrink:0, lineHeight:1 }}>{s.icon}</div>
+              <div>
+                <div style={{ fontSize:13, fontWeight:700, color:"#eaf4ff", marginBottom:2 }}>
+                  <span style={{ fontSize:9, color:"#00c9ff", fontWeight:900, letterSpacing:2, marginRight:6 }}>{s.num}</span>
+                  {s.title}
+                </div>
+                <div style={{ fontSize:11, color:"#7a90a8", lineHeight:1.5 }}>{s.desc}</div>
+              </div>
+            </div>
+          ))}
+          <button onClick={onClose}
+            style={{ width:"100%", padding:"14px", marginTop:14, background:"linear-gradient(135deg,#00c9ff22,#a78bfa22)", border:"1px solid #00c9ff55", borderRadius:12, color:"#00c9ff", cursor:"pointer", fontFamily:"inherit", fontSize:15, fontWeight:700, transition:"all .2s" }}>
+            さっそく使う →
+          </button>
+          <div style={{ textAlign:"center", marginTop:10 }}>
+            <button onClick={onClose}
+              style={{ background:"none", border:"none", color:"#445566", cursor:"pointer", fontFamily:"inherit", fontSize:11, textDecoration:"underline" }}>
+              使い方をスキップ
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── PremiumModal ─────────────────────────────────────────────
 const PLAN_INFO = {
   light: { label:"ライトプラン", price:"¥980",  color:"#00c9ff", desc:"ランキング・分析・ポートフォリオ" },
@@ -1160,6 +1205,7 @@ function AnalysisTab({ initialTicker }) {
   const [phase, setPhase] = useState(0);
   const phaseRef = useRef(null);
   const phases = ["📋 Step1: ファンダメンタル分析中...","📈 Step2: テクニカル分析中...","🤖 Step3: 総合判断を生成中...","✅ レポート完成"];
+  const [showWatchHint, setShowWatchHint] = useState(false);
   useEffect(()=>{if(initialTicker)doAnalyze(initialTicker);},[]);
   async function doAnalyze(t) {
     const raw=(t||ticker).trim().toUpperCase(); if(!raw)return;
@@ -1174,6 +1220,7 @@ function AnalysisTab({ initialTicker }) {
         if (realPrice != null) { d.current_price = formatPrice(realPrice, isJP); d._realPrice = true; }
       } catch (_) {}
       setResult({ ...d, _isJP: isJP });
+      setShowWatchHint(true);
     }
     catch(e){setError(e.message);}
     finally{setLoading(false);}
@@ -1184,6 +1231,12 @@ function AnalysisTab({ initialTicker }) {
       <InputRow value={ticker} onChange={setTicker} onEnter={()=>doAnalyze()}
         placeholder={mode==="jp" ? "ティッカー例: 7203, 6758, 9984" : "ティッカー例: NVDA, AAPL, TSLA"}
         loading={loading} btnLabel="分析する"/>
+      {/* 入力例ヒント */}
+      {!result&&!loading&&!error&&(
+        <div style={{ fontSize:10, color:"#445566", marginTop:-10, marginBottom:14, paddingLeft:2, lineHeight:1.7 }}>
+          例: <span style={{ color:"#556677" }}>NVDA（エヌビディア）</span>・<span style={{ color:"#556677" }}>AAPL（アップル）</span>・<span style={{ color:"#556677" }}>7203（トヨタ）</span>
+        </div>
+      )}
       {mode==="jp"&&!loading&&(
         <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:12 }}>
           {JP_QUICK_PICKS.map(s=>(
@@ -1196,6 +1249,12 @@ function AnalysisTab({ initialTicker }) {
       )}
       {loading&&<LoadingDots color="#00c9ff" phases={phases} phase={phase}/>}
       {error&&<ErrBox msg={error}/>}
+      {showWatchHint&&result&&!loading&&(
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 14px", background:"#00c9ff0a", border:"1px solid #00c9ff30", borderRadius:8, marginBottom:12, animation:"fadeIn .3s ease" }}>
+          <span style={{ fontSize:11, color:"#7ab0c8" }}>💡 ヒント: ウォッチリストに追加して継続監視できます</span>
+          <button onClick={()=>setShowWatchHint(false)} style={{ background:"none", border:"none", color:"#445566", cursor:"pointer", fontSize:14, padding:"0 2px", lineHeight:1 }}>×</button>
+        </div>
+      )}
       {result&&!loading&&(()=>{
         const v=vs[result.buy_rating]||vs["見送り"];
         const sc=result.overall_score>=70?"#00e5a0":result.overall_score>=40?"#ffd700":"#ff4d6d";
@@ -2801,16 +2860,16 @@ function AlertTab() {
 
 // ── TABS ──────────────────────────────────────────────────────
 const TABS = [
-  { key:"ranking",     img:rankingIcon,  label:"ランキング" },
-  { key:"analysis",    img:analysisIcon, label:"分析" },
-  { key:"portfolio",   icon:"💼",        label:"ポートフォリオ" },
-  { key:"macro",       icon:"🌍",        label:"マクロ" },
-  { key:"watch",       icon:"⭐",        label:"ウォッチ" },
+  { key:"ranking",     img:rankingIcon,   label:"ランキング", tip:"AIスコアで銘柄をランキング。買いシグナルを一覧で確認" },
+  { key:"analysis",    img:analysisIcon,  label:"分析",       tip:"銘柄を入力してAIが3段階で詳細分析" },
+  { key:"portfolio",   icon:"💼",         label:"ポートフォリオ", tip:"保有銘柄の損益を管理" },
+  { key:"macro",       icon:"🌍",         label:"マクロ" },
+  { key:"watch",       icon:"⭐",         label:"ウォッチ",   tip:"気になる銘柄をウォッチリストに追加" },
   { key:"technical",   img:technicalIcon, label:"テクニカル" },
-  { key:"fundamental", img:fundaIcon,    label:"ファンダ" },
-  { key:"strategy",    img:strategyIcon, label:"戦略ツール" },
-  { key:"info",        icon:"🗞️",       label:"情報センター" },
-  { key:"alert",       icon:"🔔",        label:"アラート" },
+  { key:"fundamental", img:fundaIcon,     label:"ファンダ" },
+  { key:"strategy",    img:strategyIcon,  label:"戦略ツール" },
+  { key:"info",        icon:"🗞️",        label:"情報センター" },
+  { key:"alert",       icon:"🔔",         label:"アラート",   tip:"目標株価に達したらメールで通知" },
 ];
 
 // ── Main App ──────────────────────────────────────────────────
@@ -2818,11 +2877,18 @@ export default function App() {
   const [activeTab, setActiveTab]       = useState("ranking");
   const [analysisTicker, setAnalysisTicker] = useState("");
   const [showDisclaimer, setShowDisclaimer] = useState(() => !localStorage.getItem("kabuai_disclaimer_v1"));
+  const [showWelcome, setShowWelcome]   = useState(() => !!localStorage.getItem("kabuai_disclaimer_v1") && !localStorage.getItem("kabuai_welcome_v1"));
   const [showPremium, setShowPremium]   = useState(false);
-  const [toast, setToast]               = useState(null); // { msg, color }
+  const [toast, setToast]               = useState(null);
+  const [tabTip, setTabTip]             = useState(null); // { key, tip }
 
   function jumpToAnalysis(ticker){ setAnalysisTicker(ticker); setActiveTab("analysis"); }
-  function acceptDisclaimer(){ localStorage.setItem("kabuai_disclaimer_v1","1"); setShowDisclaimer(false); }
+  function acceptDisclaimer(){
+    localStorage.setItem("kabuai_disclaimer_v1","1");
+    setShowDisclaimer(false);
+    if (!localStorage.getItem("kabuai_welcome_v1")) setShowWelcome(true);
+  }
+  function closeWelcome(){ localStorage.setItem("kabuai_welcome_v1","1"); setShowWelcome(false); }
 
   // 決済リダイレクト後の URL パラメータ処理
   useEffect(() => {
@@ -2850,6 +2916,7 @@ export default function App() {
       <MarketProvider>
       <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"'Courier New', monospace", color:"#c8d8e8", paddingBottom:72 }}>
         {showDisclaimer && <DisclaimerModal onAccept={acceptDisclaimer}/>}
+        {showWelcome   && <WelcomeModal onClose={closeWelcome}/>}
         {showPremium   && <PremiumModal onClose={() => setShowPremium(false)}/>}
         {toast && (
           <div style={{ position:"fixed", top:16, left:"50%", transform:"translateX(-50%)", zIndex:9998, padding:"12px 20px", background:"#09141e", border:`1px solid ${toast.color}55`, borderRadius:12, color:toast.color, fontSize:13, fontWeight:700, boxShadow:"0 8px 32px #000000aa", whiteSpace:"nowrap", maxWidth:"90vw", textOverflow:"ellipsis", overflow:"hidden" }}>
@@ -2899,14 +2966,28 @@ export default function App() {
           {activeTab==="info"        && <InfoCenterTab/>}
           {activeTab==="alert"       && <AlertTab/>}
         </div>
+        {/* タブツールチップオーバーレイ */}
+        {tabTip && (
+          <div onClick={()=>setTabTip(null)} style={{ position:"fixed", inset:0, zIndex:49, background:"transparent" }}>
+            <div style={{ position:"fixed", bottom:72, left:"50%", transform:"translateX(-50%)", zIndex:52, padding:"10px 16px", background:"#09141e", border:"1px solid #00c9ff44", borderRadius:10, color:"#8ab0c8", fontSize:12, whiteSpace:"normal", maxWidth:260, textAlign:"center", lineHeight:1.6, boxShadow:"0 -4px 24px #000000aa", animation:"fadeIn .15s ease", pointerEvents:"none" }}>
+              {tabTip.tip}
+            </div>
+          </div>
+        )}
         <nav className="tabnav" style={{ position:"fixed", bottom:0, left:0, right:0, background:"#060e18", borderTop:"1px solid #0d2030", display:"flex", zIndex:50, overflowX:"auto", scrollbarWidth:"none", WebkitOverflowScrolling:"touch" }}>
           {TABS.map(t=>(
-            <button key={t.key} onClick={()=>setActiveTab(t.key)} style={{ minWidth:68, flexShrink:0, padding:"10px 4px 8px", background:"transparent", border:"none", borderTop:activeTab===t.key?"2px solid #00ffcc":"2px solid transparent", color:activeTab===t.key?"#00ffcc":"#999999", cursor:"pointer", fontFamily:"inherit", display:"flex", flexDirection:"column", alignItems:"center", gap:3 }}>
+            <button key={t.key} onClick={()=>{ setActiveTab(t.key); setTabTip(null); }} style={{ minWidth:68, flexShrink:0, padding:"10px 4px 8px", background:"transparent", border:"none", borderTop:activeTab===t.key?"2px solid #00ffcc":"2px solid transparent", color:activeTab===t.key?"#00ffcc":"#999999", cursor:"pointer", fontFamily:"inherit", display:"flex", flexDirection:"column", alignItems:"center", gap:3, position:"relative" }}>
               {t.img
                 ? <img src={t.img} alt={t.label} style={{ width:24, height:24, objectFit:"contain", opacity:activeTab===t.key?1:0.45 }}/>
                 : <span style={{ fontSize:18, opacity:activeTab===t.key?1:0.45 }}>{t.icon}</span>
               }
               <span style={{ fontSize:9, fontWeight:activeTab===t.key?700:400, whiteSpace:"nowrap" }}>{t.label}</span>
+              {t.tip && (
+                <span onClick={e=>{ e.stopPropagation(); setTabTip(tabTip?.key===t.key?null:t); }}
+                  style={{ position:"absolute", top:4, right:4, width:13, height:13, borderRadius:"50%", background: tabTip?.key===t.key?"#00c9ff":"#1a3050", color: tabTip?.key===t.key?"#000":"#556677", fontSize:8, fontWeight:900, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", lineHeight:1 }}>
+                  ?
+                </span>
+              )}
             </button>
           ))}
         </nav>
