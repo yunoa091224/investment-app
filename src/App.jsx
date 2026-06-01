@@ -195,20 +195,20 @@ async function callAPIRaw(systemPrompt, userMessage) {
   return tb.text;
 }
 
-async function callThreeStepAnalysis(ticker, onStep) {
+async function callThreeStepAnalysis(ticker, onStep, jpNote = "") {
   // Step1: ファンダメンタル分析
   onStep(0);
-  const fundamental = await callAPIRaw(STEP1_PROMPT, `${ticker}のファンダメンタル分析をしてください。`);
+  const fundamental = await callAPIRaw(STEP1_PROMPT, `${ticker}のファンダメンタル分析をしてください。${jpNote}`);
 
   // Step2: テクニカル分析
   onStep(1);
-  const technical = await callAPIRaw(STEP2_PROMPT, `${ticker}のテクニカル分析をしてください。`);
+  const technical = await callAPIRaw(STEP2_PROMPT, `${ticker}のテクニカル分析をしてください。${jpNote}`);
 
   // Step3: 総合判断 → JSON出力
   onStep(2);
   const result = await callAPI(
     ANALYSIS_PROMPT,
-    `銘柄: ${ticker}\n\n【Step1 ファンダメンタル分析（事業モデル・財務・成長ドライバー・強弱）】\n${fundamental}\n\n【Step2 テクニカル分析（トレンド・RSI・MACD・移動平均・BB・サポレジ・エントリー候補）】\n${technical}\n\n上記2つの詳細分析を完全に統合し、ファンダメンタルとテクニカル両面から総合判断してください。entry_zoneはStep2のエントリー候補を反映し、summaryはStep1・2の核心を3〜4文にまとめてください。JSONのみ返してください。`
+    `銘柄: ${ticker}\n\n【Step1 ファンダメンタル分析（事業モデル・財務・成長ドライバー・強弱）】\n${fundamental}\n\n【Step2 テクニカル分析（トレンド・RSI・MACD・移動平均・BB・サポレジ・エントリー候補）】\n${technical}\n\n上記2つの詳細分析を完全に統合し、ファンダメンタルとテクニカル両面から総合判断してください。entry_zoneはStep2のエントリー候補を反映し、summaryはStep1・2の核心を3〜4文にまとめてください。${jpNote}JSONのみ返してください。`
   );
   return result;
 }
@@ -388,6 +388,21 @@ function isMarketOpen() {
   const utcMin = now.getUTCHours() * 60 + now.getUTCMinutes();
   const etMin = ((utcMin - etOffset * 60) % 1440 + 1440) % 1440;
   return etMin >= 9 * 60 + 30 && etMin < 16 * 60;
+}
+
+// ── Japan stock helpers ───────────────────────────────────────
+function normalizeTickerInput(raw) {
+  const trimmed = raw.trim().toUpperCase();
+  if (/^\d{4,5}$/.test(trimmed)) return { symbol: trimmed + ".T", isJP: true };
+  return { symbol: trimmed, isJP: /^\d{4,5}\.T$/.test(trimmed) };
+}
+
+function isJPTicker(symbol) {
+  return /^\d{4,5}(\.T)?$/i.test((symbol || "").trim());
+}
+
+function formatPrice(price, isJP) {
+  return isJP ? `¥${Math.round(price).toLocaleString("ja-JP")}` : `$${price.toFixed(2)}`;
 }
 
 // ── Forex Context ─────────────────────────────────────────────
@@ -1073,16 +1088,18 @@ function AnalysisTab({ initialTicker }) {
   const phases = ["📋 Step1: ファンダメンタル分析中...","📈 Step2: テクニカル分析中...","🤖 Step3: 総合判断を生成中...","✅ レポート完成"];
   useEffect(()=>{if(initialTicker)doAnalyze(initialTicker);},[]);
   async function doAnalyze(t) {
-    const target=(t||ticker).trim().toUpperCase(); if(!target)return;
+    const raw=(t||ticker).trim().toUpperCase(); if(!raw)return;
+    const { symbol, isJP } = normalizeTickerInput(raw);
+    const jpNote = isJP ? "\n※ これは東証上場の日本株です。価格は円（JPY）建てで表示し、current_priceは「¥2850」形式で記載してください。" : "";
     setLoading(true);setResult(null);setError(null);setPhase(0);
     try{
-      const d=await callThreeStepAnalysis(target, setPhase);
+      const d=await callThreeStepAnalysis(symbol, setPhase, jpNote);
       setPhase(3);
       try {
-        const realPrice = await fetchFinnhubPrice(target);
-        if (realPrice != null) { d.current_price = `$${realPrice.toFixed(2)}`; d._realPrice = true; }
+        const realPrice = await fetchFinnhubPrice(symbol);
+        if (realPrice != null) { d.current_price = formatPrice(realPrice, isJP); d._realPrice = true; }
       } catch (_) {}
-      setResult(d);
+      setResult({ ...d, _isJP: isJP });
     }
     catch(e){setError(e.message);}
     finally{setLoading(false);}
@@ -1090,7 +1107,7 @@ function AnalysisTab({ initialTicker }) {
   const vs={"今すぐ買い":{color:"#00e5a0",bg:"#00e5a015",border:"#00e5a040"},"待て":{color:"#ffd700",bg:"#ffd70015",border:"#ffd70040"},"見送り":{color:"#ff4d6d",bg:"#ff4d6d15",border:"#ff4d6d40"}};
   return (
     <div style={{ padding:"16px 16px 8px" }}>
-      <InputRow value={ticker} onChange={setTicker} onEnter={()=>doAnalyze()} placeholder="ティッカー例: NVDA, AAPL, TSLA" loading={loading} btnLabel="分析する"/>
+      <InputRow value={ticker} onChange={setTicker} onEnter={()=>doAnalyze()} placeholder="ティッカー例: NVDA, AAPL, 7203, 6758" loading={loading} btnLabel="分析する"/>
       {loading&&<LoadingDots color="#00c9ff" phases={phases} phase={phase}/>}
       {error&&<ErrBox msg={error}/>}
       {result&&!loading&&(()=>{
@@ -1104,6 +1121,7 @@ function AnalysisTab({ initialTicker }) {
                 <div style={{ fontSize:11, color:"#7a90a8", marginBottom:4 }}>{result.company} · {result.sector}</div>
                 <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                   <span style={{ fontSize:15, color:"#e8f4ff", fontWeight:700 }}>{result.current_price}</span>
+                  {result._isJP && <span style={{ fontSize:13 }}>🇯🇵</span>}
                   <span style={{ fontSize:8, padding:"1px 4px",
                     background: result._realPrice ? "#00c9ff22" : "#ffffff08",
                     color:      result._realPrice ? "#00c9ff"   : "#7a90a8",
@@ -1111,7 +1129,7 @@ function AnalysisTab({ initialTicker }) {
                     {result._realPrice ? "RT" : "AI推定"}
                   </span>
                 </div>
-                {rate&&result.current_price&&<div style={{ fontSize:10, color:"#7a90a8" }}>≈ ¥{Math.round(parseFloat(result.current_price.replace(/[^0-9.]/g,""))*rate).toLocaleString()}</div>}
+                {!result._isJP&&rate&&result.current_price&&<div style={{ fontSize:10, color:"#7a90a8" }}>≈ ¥{Math.round(parseFloat(result.current_price.replace(/[^0-9.]/g,""))*rate).toLocaleString()}</div>}
               </div>
               <div style={{ textAlign:"center" }}>
                 <div style={{ padding:"10px 16px", background:v.bg, border:`1px solid ${v.border}`, borderRadius:12, color:v.color, fontSize:15, fontWeight:900, marginBottom:8 }}>{result.buy_rating}</div>
@@ -1396,13 +1414,13 @@ function WatchlistTab({ onAnalyze }) {
   const [editId, setEditId] = useState(null);
   const [editMemo, setEditMemo] = useState("");
   function save(it){setItems(it);localStorage.setItem("watchlist",JSON.stringify(it));}
-  function addItem(){if(!form.ticker.trim())return;save([...items,{ticker:form.ticker.toUpperCase().trim(),memo:form.memo,id:Date.now(),added:new Date().toLocaleDateString("ja-JP")}]);setForm({ticker:"",memo:""});setShowForm(false);}
+  function addItem(){if(!form.ticker.trim())return;const{symbol}=normalizeTickerInput(form.ticker);save([...items,{ticker:symbol,memo:form.memo,id:Date.now(),added:new Date().toLocaleDateString("ja-JP")}]);setForm({ticker:"",memo:""});setShowForm(false);}
   return (
     <div style={{ padding:"16px 16px 8px" }}>
       <button onClick={()=>setShowForm(!showForm)} style={{ width:"100%", padding:"10px", background:"#ffd70015", border:"1px solid #ffd70040", borderRadius:8, color:"#ffd700", cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:700, marginBottom:16 }}>⭐ + 銘柄を追加</button>
       {showForm&&(
         <div style={{ background:"#09141e", border:"1px solid #0d2535", borderRadius:10, padding:14, marginBottom:16, animation:"fadeIn .2s ease" }}>
-          <input value={form.ticker} onChange={e=>setForm(f=>({...f,ticker:e.target.value.toUpperCase()}))} placeholder="ティッカー (例: NVDA)" style={{ width:"100%", background:"#04090f", border:"1px solid #0d2535", borderRadius:6, padding:"8px 10px", color:"#e8f4ff", fontFamily:"inherit", fontSize:13, outline:"none", marginBottom:8 }}/>
+          <input value={form.ticker} onChange={e=>setForm(f=>({...f,ticker:e.target.value.toUpperCase()}))} placeholder="ティッカー (例: NVDA, 7203)" style={{ width:"100%", background:"#04090f", border:"1px solid #0d2535", borderRadius:6, padding:"8px 10px", color:"#e8f4ff", fontFamily:"inherit", fontSize:13, outline:"none", marginBottom:8 }}/>
           <textarea value={form.memo} onChange={e=>setForm(f=>({...f,memo:e.target.value}))} placeholder="メモ（任意）" style={{ width:"100%", background:"#04090f", border:"1px solid #0d2535", borderRadius:6, padding:"8px 10px", color:"#e8f4ff", fontFamily:"inherit", fontSize:12, outline:"none", resize:"none", height:60, marginBottom:8 }}/>
           <button onClick={addItem} style={{ width:"100%", padding:"8px", background:"#ffd70022", border:"1px solid #ffd70055", borderRadius:6, color:"#ffd700", cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:700 }}>追加する</button>
         </div>
@@ -1412,7 +1430,10 @@ function WatchlistTab({ onAnalyze }) {
           <div key={item.id} style={{ background:"#09141e", border:"1px solid #0d2030", borderRadius:10, padding:"12px 14px", marginBottom:8 }}>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:(item.memo||editId===item.id)?8:0 }}>
               <div>
-                <div style={{ fontSize:16, fontWeight:900, color:"#e8f4ff" }}>{item.ticker}</div>
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <span style={{ fontSize:16, fontWeight:900, color:"#e8f4ff" }}>{item.ticker.replace(/\.T$/, "")}</span>
+                  {isJPTicker(item.ticker) && <span style={{ fontSize:13 }}>🇯🇵</span>}
+                </div>
                 <div style={{ fontSize:9, color:"#888888" }}>追加日: {item.added}</div>
               </div>
               <div style={{ display:"flex", gap:6 }}>
@@ -2526,13 +2547,14 @@ function AlertTab() {
     if (!email || !ticker || !targetPrice) {
       return showStatus("メールアドレス・銘柄・目標株価を入力してください", "#ff4d6d");
     }
+    const { symbol: normalizedTicker } = normalizeTickerInput(ticker);
     localStorage.setItem("kabuai_alert_email", email);
     setAdding(true);
     try {
       const r = await fetch("/api/alerts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticker, targetPrice: Number(targetPrice), direction, email }),
+        body: JSON.stringify({ ticker: normalizedTicker, targetPrice: Number(targetPrice), direction, email }),
       });
       if (!r.ok) throw new Error();
       setTicker(""); setTargetPrice("");
@@ -2600,8 +2622,8 @@ function AlertTab() {
               onKeyDown={e => e.key === "Enter" && addAlert()} />
           </div>
           <div>
-            <label style={lbl}>目標株価 (USD)</label>
-            <input style={input} type="number" placeholder="1000" value={targetPrice}
+            <label style={lbl}>目標株価（{isJPTicker(ticker) ? "JPY 円" : "USD"}）</label>
+            <input style={input} type="number" placeholder={isJPTicker(ticker) ? "3000" : "1000"} value={targetPrice}
               onChange={e => setTargetPrice(e.target.value)}
               onKeyDown={e => e.key === "Enter" && addAlert()} />
           </div>
@@ -2645,9 +2667,10 @@ function AlertTab() {
             {alerts.map((a, i) => (
               <div key={a.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: i < alerts.length - 1 ? "1px solid #0d2030" : "none" }}>
                 <div>
-                  <span style={{ fontWeight: 700, color: "#eaf4ff", marginRight: 8 }}>{a.ticker}</span>
+                  <span style={{ fontWeight: 700, color: "#eaf4ff", marginRight: 4 }}>{a.ticker.replace(/\.T$/, "")}</span>
+                  {isJPTicker(a.ticker) && <span style={{ fontSize: 11, marginRight: 6 }}>🇯🇵</span>}
                   <span style={{ fontSize: 12, color: "#7a90a8" }}>
-                    {a.direction === "above" ? "📈" : "📉"} ${a.targetPrice} {a.direction === "above" ? "以上" : "以下"}
+                    {a.direction === "above" ? "📈" : "📉"} {isJPTicker(a.ticker) ? `¥${Number(a.targetPrice).toLocaleString()}` : `$${a.targetPrice}`} {a.direction === "above" ? "以上" : "以下"}
                   </span>
                   <div style={{ fontSize: 10, color: "#1a3040", marginTop: 2 }}>{a.email}</div>
                 </div>

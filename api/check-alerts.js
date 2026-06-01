@@ -34,16 +34,23 @@ async function fetchPrice(ticker) {
   }
 }
 
+function isJPTicker(ticker) {
+  return /^\d{4,5}\.T$/i.test(ticker);
+}
+
 function buildEmailHtml(ticker, currentPrice, targetPrice, direction) {
+  const isJP = isJPTicker(ticker);
+  const priceStr  = isJP ? `¥${Math.round(currentPrice).toLocaleString()}` : `$${currentPrice.toFixed(2)}`;
+  const targetStr = isJP ? `¥${Number(targetPrice).toLocaleString()}`      : `$${targetPrice}`;
   const dirLabel = direction === 'above' ? '以上' : '以下';
   const arrow = direction === 'above' ? '📈' : '📉';
   return `
     <div style="font-family:sans-serif;max-width:480px;margin:0 auto;background:#060e18;color:#eaf4ff;padding:32px;border-radius:12px">
       <h2 style="color:#00e5a0;margin-top:0">${arrow} 目標株価に到達しました</h2>
       <table style="width:100%;border-collapse:collapse">
-        <tr><td style="color:#4a7090;padding:8px 0;width:120px">銘柄</td><td style="font-weight:700">${ticker}</td></tr>
-        <tr><td style="color:#4a7090;padding:8px 0">現在株価</td><td style="font-weight:700;color:#00e5a0">$${currentPrice.toFixed(2)}</td></tr>
-        <tr><td style="color:#4a7090;padding:8px 0">目標株価</td><td style="font-weight:700">$${targetPrice} ${dirLabel}</td></tr>
+        <tr><td style="color:#4a7090;padding:8px 0;width:120px">銘柄</td><td style="font-weight:700">${ticker.replace(/\.T$/, "")}${isJP ? " 🇯🇵" : ""}</td></tr>
+        <tr><td style="color:#4a7090;padding:8px 0">現在株価</td><td style="font-weight:700;color:#00e5a0">${priceStr}</td></tr>
+        <tr><td style="color:#4a7090;padding:8px 0">目標株価</td><td style="font-weight:700">${targetStr} ${dirLabel}</td></tr>
       </table>
       <p style="margin-top:24px">Kabu.AI で詳細を確認し、投資判断を行ってください。</p>
       <p style="color:#2a4560;font-size:11px;margin-top:16px">※ 本メールはKabu.AIからの自動送信です。投資判断はご自身の責任で行ってください。</p>
