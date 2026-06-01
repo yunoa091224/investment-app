@@ -2856,8 +2856,8 @@ function AlertTab() {
             )}
           </div>
           <div>
-            <label style={lbl}>目標株価（{isJPTicker(ticker) ? "JPY 円" : "USD"}）</label>
-            <input style={input} type="number" placeholder={isJPTicker(ticker) ? "3000" : "1000"} value={targetPrice}
+            <label style={lbl}>目標株価（{mode === "jp" ? "JPY 円" : "USD"}）</label>
+            <input style={input} type="number" placeholder={mode === "jp" ? "3000" : "1000"} value={targetPrice}
               onChange={e => setTargetPrice(e.target.value)}
               onKeyDown={e => e.key === "Enter" && addAlert()} />
           </div>
@@ -3041,10 +3041,10 @@ export default function App() {
         )}
         <nav className="tabnav" style={{ position:"fixed", bottom:0, left:0, right:0, background:"#060e18", borderTop:"1px solid #0d2030", display:"flex", zIndex:50, overflowX:"auto", scrollbarWidth:"none", WebkitOverflowScrolling:"touch" }}>
           {TABS.map(t=>(
-            <button key={t.key} onClick={()=>{ setActiveTab(t.key); setTabTip(null); }} style={{ minWidth:68, flexShrink:0, padding:"10px 4px 8px", background:"transparent", border:"none", borderTop:activeTab===t.key?"2px solid #00ffcc":"2px solid transparent", color:activeTab===t.key?"#00ffcc":"#999999", cursor:"pointer", fontFamily:"inherit", display:"flex", flexDirection:"column", alignItems:"center", gap:3, position:"relative" }}>
+            <button key={t.key} onClick={()=>{ setActiveTab(t.key); setTabTip(null); }} style={{ minWidth:68, flexShrink:0, padding:"10px 4px 8px", background:"transparent", border:"none", borderTop:activeTab===t.key?"2px solid #00ffcc":"2px solid transparent", color:activeTab===t.key?"#00ffcc":"#bbbbbb", cursor:"pointer", fontFamily:"inherit", display:"flex", flexDirection:"column", alignItems:"center", gap:3, position:"relative" }}>
               {t.img
-                ? <img src={t.img} alt={t.label} style={{ width:24, height:24, objectFit:"contain", opacity:activeTab===t.key?1:0.45 }}/>
-                : <span style={{ fontSize:18, opacity:activeTab===t.key?1:0.45 }}>{t.icon}</span>
+                ? <img src={t.img} alt={t.label} style={{ width:24, height:24, objectFit:"contain", opacity:activeTab===t.key?1:0.65 }}/>
+                : <span style={{ fontSize:18, opacity:activeTab===t.key?1:0.65 }}>{t.icon}</span>
               }
               <span style={{ fontSize:9, fontWeight:activeTab===t.key?700:400, whiteSpace:"nowrap" }}>{t.label}</span>
               {t.tip && (
