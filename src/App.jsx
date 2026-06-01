@@ -35,7 +35,7 @@ stocksは10件。ratingは「強気買い」「買い」「積極買い」のい
 
 const JP_RANKING_PROMPT = `あなたは世界トップクラスの株式アナリストです。現時点（2026年6月）での東証上場株式（東京証券取引所・プライム市場）の投資推奨トップ10を作成してください。以下のJSON形式のみで回答（前置き・説明・マークダウン一切不要）:
 {"updated":"2026年6月2日","market_comment":"日本市場環境2〜3文","stocks":[{"rank":1,"ticker":"7203","company":"トヨタ自動車","sector":"自動車","country":"🇯🇵","current_price":"¥3500","target_price":"¥5000","score":9.2,"momentum":9,"growth":9,"safety":7,"catalyst":"EV戦略加速","risk":"円高リスク","reason":"グローバル展開","rating":"強気買い","entry_zone":"¥3400〜¥3450","take_profit1":"¥3800","take_profit2":"¥4500","stop_loss":"¥3200","sell_trigger":"円高急進・業績下方修正","risk_reward":"1:3.2"}]}
-stocksは10件。tickerは4〜5桁の数字のみ（例: 7203, 6758）。ratingは「強気買い」「買い」「積極買い」のいずれか。scoreは小数点1桁(1-10)。momentum/growth/safetyは整数(1-10)。current_priceとtarget_priceはAI推定値（¥表記）。target_priceは現在価格の+15〜+60%の範囲で設定。upsideは含めない。take_profit1・take_profit2・stop_lossは価格のみ（%不要・¥表記）。改行なしの1行JSONのみ。`;
+stocksは10件。tickerは4〜5桁の数字のみ（例: 7203, 6758）。ratingは「強気買い」「買い」「積極買い」のいずれか。scoreは小数点1桁(1-10)。momentum/growth/safetyは整数(1-10)。current_priceとtarget_priceはプレースホルダー（後工程でYahoo Finance実データに自動置換される）。target_priceは現在価格の+15〜+60%の範囲で設定。upsideは含めない。take_profit1・take_profit2・stop_lossは価格のみ（%不要・¥表記）。改行なしの1行JSONのみ。`;
 
 const ANALYSIS_PROMPT = `あなたは世界トップクラスの株式アナリストです。指定銘柄を詳細分析し以下のJSON形式のみで回答（前置き・説明不要）:
 {"ticker":"NVDA","company":"NVIDIA Corporation","sector":"半導体","current_price":"$950","overall_score":82,"buy_rating":"今すぐ買い","entry_zone":"$920〜$945","stop_loss":"$885 -6.8%","take_profit1":"$1020 +7%","take_profit2":"$1100 +15%","take_profit3":"$1200 +26%","hold_period":"2〜4週間","risk_reward":"1:2.8","sell_triggers":["RSI75超え・過熱感","決算ガイダンス下方修正","中国規制強化"],"summary":"Blackwellチップ需要が想定超で...","pros":["AI需要急拡大","高い参入障壁"],"cons":["高バリュエーション","地政学リスク"]}
@@ -255,6 +255,33 @@ async function fetchFinnhubBatchPrices(symbols) {
   return result;
 }
 
+// ── Yahoo Finance helpers for JP stocks (.T tickers) ──────────────────────
+async function fetchYahooJPPrice(symbol) {
+  try {
+    const res = await fetch(`/api/jp-stock-price?symbol=${encodeURIComponent(symbol)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.price == null) return null;
+    return { price: parseFloat(data.price), dp: data.dp != null ? parseFloat(data.dp) : null };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchYahooJPBatchPrices(symbols) {
+  if (!symbols.length) return {};
+  const settled = await Promise.allSettled(
+    symbols.map(async s => ({ s, q: await fetchYahooJPPrice(s) }))
+  );
+  const result = {};
+  for (const r of settled) {
+    if (r.status === 'fulfilled' && r.value.q?.price != null) {
+      result[r.value.s] = r.value.q;
+    }
+  }
+  return result;
+}
+
 // ── Ranking technical indicators (Twelve Data バッチAPI: 2コールで全銘柄) ──
 async function fetchRankingIndicators(symbols) {
   const KEY = import.meta.env.VITE_TWELVE_DATA_KEY;
@@ -281,7 +308,7 @@ async function fetchRankingIndicators(symbols) {
   return result;
 }
 
-function mergeRealPrice(stock, quote, techData, isJP = false) {
+function mergeRealPrice(stock, quote, techData, isJP = false, period = "mid") {
   const fmtC  = isJP ? n => `¥${Math.round(n).toLocaleString("ja-JP")}` : n => `$${n.toFixed(2)}`;
   const fmtCI = isJP ? n => `¥${Math.round(n).toLocaleString("ja-JP")}` : n => `$${Math.round(n)}`;
   // quote は { price, dp } オブジェクトまたは null
@@ -353,13 +380,14 @@ function mergeRealPrice(stock, quote, techData, isJP = false) {
   const reward  = tp2Price - p;
   const rrStr   = risk > 0 && reward > 0 ? `1:${(reward / risk).toFixed(1)}` : "1:1.0";
 
-  // 目標株価: リアルタイム株価 × ratingに応じた倍率で再計算
-  //   強気買い: +40〜60% → 中間値 +50%
-  //   積極買い: +30〜50% → 中間値 +40%
-  //   買い:     +20〜40% → 中間値 +30%
-  //   その他:   +10〜20% → 中間値 +15%
-  const targetMultipliers = { "強気買い": 1.50, "積極買い": 1.40, "買い": 1.30 };
-  const targetMult        = targetMultipliers[stock.rating] ?? 1.15;
+  // 目標株価: リアルタイム株価 × 期間×評価の倍率で再計算
+  const periodMultipliers = {
+    short: { "強気買い": 1.15, "積極買い": 1.10, "買い": 1.05 },
+    mid:   { "強気買い": 1.30, "積極買い": 1.22, "買い": 1.15 },
+    long:  { "強気買い": 1.50, "積極買い": 1.40, "買い": 1.30 },
+  };
+  const mulMap   = periodMultipliers[period] ?? periodMultipliers.mid;
+  const targetMult = mulMap[stock.rating] ?? (period === "short" ? 1.08 : period === "long" ? 1.25 : 1.18);
   const newTargetPrice    = Math.round(p * targetMult);
   const targetUpsidePct   = ((newTargetPrice - p) / p * 100);
 
@@ -1065,7 +1093,9 @@ function RankingTab() {
     const isJP = m === "jp";
     const apiTickers = current._rawStocks.map(s => isJP ? s.ticker + ".T" : s.ticker);
     try {
-      const quotes = await fetchFinnhubBatchPrices(apiTickers);
+      const quotes = isJP
+        ? await fetchYahooJPBatchPrices(apiTickers)
+        : await fetchFinnhubBatchPrices(apiTickers);
       setData(prev => {
         const c = prev[key];
         if (!c || !c._rawStocks) return prev;
@@ -1075,7 +1105,7 @@ function RankingTab() {
             ...c,
             stocks: c._rawStocks.map(s => {
               const t = isJP ? s.ticker + ".T" : s.ticker;
-              return mergeRealPrice(s, quotes[t], c._indicators?.[t], isJP);
+              return mergeRealPrice(s, quotes[t], c._indicators?.[t], isJP, p);
             }),
           },
         };
@@ -1103,7 +1133,7 @@ function RankingTab() {
       setPhaseIdx(phases.length - 2);
       const apiTickers = (r.stocks || []).map(s => isJP ? s.ticker + ".T" : s.ticker);
       const [pricesR, indicatorsR] = await Promise.allSettled([
-        fetchFinnhubBatchPrices(apiTickers),
+        isJP ? fetchYahooJPBatchPrices(apiTickers) : fetchFinnhubBatchPrices(apiTickers),
         isJP ? Promise.resolve({}) : fetchRankingIndicators(apiTickers),
       ]);
       setPhaseIdx(phases.length - 1);
@@ -1113,7 +1143,7 @@ function RankingTab() {
         ...r,
         stocks: (r.stocks || []).map(s => {
           const t = isJP ? s.ticker + ".T" : s.ticker;
-          return mergeRealPrice(s, prices[t], indicators[t], isJP);
+          return mergeRealPrice(s, prices[t], indicators[t], isJP, p);
         }),
         _rawStocks:  r.stocks || [],
         _indicators: indicators,
@@ -1216,7 +1246,9 @@ function AnalysisTab({ initialTicker }) {
       const d=await callThreeStepAnalysis(symbol, setPhase, jpNote);
       setPhase(3);
       try {
-        const realPrice = await fetchFinnhubPrice(symbol);
+        const realPrice = isJP
+          ? (await fetchYahooJPPrice(symbol))?.price ?? null
+          : await fetchFinnhubPrice(symbol);
         if (realPrice != null) { d.current_price = formatPrice(realPrice, isJP); d._realPrice = true; }
       } catch (_) {}
       setResult({ ...d, _isJP: isJP });
