@@ -487,63 +487,90 @@ function MarketToggle() {
 }
 
 // ── Forex Context ─────────────────────────────────────────────
-const ForexContext = createContext({ rate: null, updatedAt: null, loading: false, pendingSec: null, refetch: () => {} });
+const ForexContext = createContext({ rate: null, updatedAt: null, loading: false, isFallback: false, refetch: () => {} });
+
+const FOREX_FALLBACK = 150.0;
+const FOREX_REAL_INTERVAL  = 30 * 60 * 1000; // 30分: 実レート取得成功時
+const FOREX_RETRY_INTERVAL = 30 * 1000;       // 30秒: フォールバック時に再試行
 
 function ForexProvider({ children }) {
-  const [rate, setRate] = useState(null);
+  const [rate, setRate]           = useState(null);
   const [updatedAt, setUpdatedAt] = useState(null);
-  const [loading, setLoading] = useState(false);
-  // 起動からの経過秒数（カウントダウン表示用）
-  const [pendingSec, setPendingSec] = useState(70);
-  const intervalRef = useRef(null);
-  const countdownRef = useRef(null);
+  const [loading, setLoading]     = useState(false);
+  const [isFallback, setIsFallback] = useState(false);
+  const timerRef = useRef(null);
 
+  // フォールバックチェーン: Twelve Data → Finnhub → 固定値150.0
+  // 戻り値: true=実レート取得成功 / false=フォールバック使用
   async function fetchRate() {
-    const KEY = import.meta.env.VITE_TWELVE_DATA_KEY;
-    if (!KEY) return;
+    const KEY12 = import.meta.env.VITE_TWELVE_DATA_KEY;
+    const FKEY  = import.meta.env.VITE_FINNHUB_KEY;
     setLoading(true);
-    setPendingSec(null);
-    try {
-      const res = await fetch(`https://api.twelvedata.com/price?symbol=USD/JPY&apikey=${KEY}`);
-      const data = await res.json();
+    let realRate = null;
 
-      if (data.price && data.status !== "error" && !data.code) {
-        setRate(parseFloat(data.price));
-        setUpdatedAt(new Date());
-      } else {
-        console.warn("[TwelveData] forex error:", data.code, data.message);
+    try {
+      // 1. Twelve Data
+      if (KEY12) {
+        try {
+          const res  = await fetch(`https://api.twelvedata.com/price?symbol=USD/JPY&apikey=${KEY12}`);
+          const data = await res.json();
+          if (data.price && !data.code && data.status !== "error") {
+            realRate = parseFloat(data.price);
+          } else {
+            console.warn("[TwelveData] forex:", data.code, data.message);
+          }
+        } catch (e) { console.warn("[TwelveData] forex fetch:", e.message); }
       }
-    } catch (e) {
-      console.warn("為替レート取得失敗:", e.message);
+
+      // 2. Finnhub forex
+      if (!realRate && FKEY) {
+        try {
+          const res  = await fetch(`https://finnhub.io/api/v1/forex/rates?base=USD&token=${FKEY}`);
+          const data = await res.json();
+          const jpy  = data?.quote?.JPY;
+          if (jpy && jpy > 0) {
+            realRate = parseFloat(jpy);
+          } else {
+            console.warn("[Finnhub] forex:", data);
+          }
+        } catch (e) { console.warn("[Finnhub] forex fetch:", e.message); }
+      }
+
+      // 3. 固定フォールバック
+      const final = realRate ?? FOREX_FALLBACK;
+      setRate(final);
+      setUpdatedAt(new Date());
+      setIsFallback(realRate === null);
+      return realRate !== null;
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => {
-    // 無料プラン競合回避: 株価取得(8cr/分)の後に為替を取得
-    // 起動70秒後に初回取得、以降30分ごと（月800cr枠を節約）
-    let sec = 70;
-    countdownRef.current = setInterval(() => {
-      sec -= 1;
-      setPendingSec(s => s !== null ? s - 1 : null);
-      if (sec <= 0) clearInterval(countdownRef.current);
-    }, 1000);
+  function schedule(isReal) {
+    clearTimeout(timerRef.current);
+    const delay = isReal ? FOREX_REAL_INTERVAL : FOREX_RETRY_INTERVAL;
+    timerRef.current = setTimeout(async () => {
+      const ok = await fetchRate();
+      schedule(ok);
+    }, delay);
+  }
 
-    const firstTimer = setTimeout(() => {
-      fetchRate();
-      intervalRef.current = setInterval(fetchRate, 30 * 60 * 1000);
-    }, 70 * 1000);
+  useEffect(() => {
+    // 5秒後に初回取得（他APIとの競合を最小限に抑えつつ即座に表示）
+    const firstTimer = setTimeout(async () => {
+      const ok = await fetchRate();
+      schedule(ok);
+    }, 5 * 1000);
 
     return () => {
       clearTimeout(firstTimer);
-      clearInterval(countdownRef.current);
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      clearTimeout(timerRef.current);
     };
   }, []);
 
   return (
-    <ForexContext.Provider value={{ rate, updatedAt, loading, pendingSec, refetch: fetchRate }}>
+    <ForexContext.Provider value={{ rate, updatedAt, loading, isFallback, refetch: async () => { const ok = await fetchRate(); schedule(ok); } }}>
       {children}
     </ForexContext.Provider>
   );
@@ -552,29 +579,25 @@ function ForexProvider({ children }) {
 function useForex() { return useContext(ForexContext); }
 
 function ForexBadge() {
-  const { rate, updatedAt, loading, pendingSec, refetch } = useForex();
+  const { rate, updatedAt, loading, isFallback, refetch } = useForex();
   const timeStr = updatedAt
     ? updatedAt.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })
     : null;
-  const isPending = pendingSec !== null && pendingSec > 0 && !rate;
+  const dotColor = loading ? "#ffd700" : rate && !isFallback ? "#00c9ff" : rate ? "#7a90a8" : "#556677";
   return (
-    <div onClick={isPending ? undefined : refetch}
-      title={isPending ? `株価取得後に為替を取得（あと${pendingSec}秒）` : "クリックで手動更新（30分ごと自動更新）"}
-      style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"4px 10px", background:"#00c9ff08", border:"1px solid #00c9ff22", borderRadius:10, cursor:isPending?"default":"pointer", marginTop:6 }}>
-      <span style={{ width:5, height:5, borderRadius:"50%",
-        background: loading ? "#ffd700" : isPending ? "#556677" : rate ? "#00c9ff" : "#7a90a8",
+    <div onClick={loading ? undefined : refetch}
+      title={loading ? "取得中..." : "クリックで手動更新"}
+      style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"4px 10px", background:"#00c9ff08", border:"1px solid #00c9ff22", borderRadius:10, cursor:loading?"default":"pointer", marginTop:6 }}>
+      <span style={{ width:5, height:5, borderRadius:"50%", background:dotColor,
         display:"inline-block", animation: loading ? "pulse 1s infinite" : "none" }}/>
-      <span style={{ fontSize:10, fontWeight:700,
-        color: loading ? "#ffd700" : isPending ? "#556677" : rate ? "#00c9ff" : "#7a90a8" }}>
+      <span style={{ fontSize:10, fontWeight:700, color:dotColor }}>
         {loading
           ? "為替取得中..."
-          : isPending
-          ? `USD/JPY 取得待機中（${pendingSec}秒後）`
           : rate
-          ? `1 USD = ${rate.toFixed(2)} 円`
-          : "為替レート未取得（手動更新可）"}
+          ? `1 USD = ${rate.toFixed(2)} 円${isFallback ? " (参考値)" : ""}`
+          : "為替レート取得中..."}
       </span>
-      {timeStr && <span style={{ fontSize:9, color:"#556677" }}>{timeStr} 更新 · 30分毎</span>}
+      {timeStr && !isFallback && <span style={{ fontSize:9, color:"#556677" }}>{timeStr} 更新 · 30分毎</span>}
     </div>
   );
 }
