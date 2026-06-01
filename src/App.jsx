@@ -509,17 +509,16 @@ function ForexProvider({ children }) {
     let realRate = null;
 
     try {
-      // 1. Frankfurter（キー不要・無制限・最優先）
+      // 1. Frankfurter（サーバープロキシ経由・CORSなし・キー不要）
       try {
-        const res  = await fetch("https://api.frankfurter.app/latest?from=USD&to=JPY");
+        const res  = await fetch("/api/exchange-rate");
         const data = await res.json();
-        const jpy  = data?.rates?.JPY;
-        if (jpy && jpy > 0) {
-          realRate = parseFloat(jpy);
+        if (res.ok && data.rate && data.rate > 0) {
+          realRate = parseFloat(data.rate);
         } else {
-          console.warn("[Frankfurter] unexpected response:", data);
+          console.warn("[exchange-rate proxy] error:", data.error);
         }
-      } catch (e) { console.warn("[Frankfurter] fetch failed:", e.message); }
+      } catch (e) { console.warn("[exchange-rate proxy] fetch failed:", e.message); }
 
       // 2. Twelve Data
       if (!realRate && KEY12) {
