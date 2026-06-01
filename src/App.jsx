@@ -33,6 +33,10 @@ const RANKING_PROMPT = `あなたは世界トップクラスの株式アナリ�
 {"updated":"2026年5月28日","market_comment":"市場環境2〜3文","stocks":[{"rank":1,"ticker":"NVDA","company":"NVIDIA","sector":"半導体","country":"🇺🇸","current_price":"$950","target_price":"$1200","score":9.2,"momentum":9,"growth":9,"safety":7,"catalyst":"Blackwell需要","risk":"競合リスク","reason":"AI需要拡大","rating":"強気買い","entry_zone":"$920〜$940","take_profit1":"$1050","take_profit2":"$1150","stop_loss":"$880","sell_trigger":"決算ミス・RSI75超","risk_reward":"1:3.2"}]}
 stocksは10件。ratingは「強気買い」「買い」「積極買い」のいずれか。scoreは小数点1桁(1-10)。momentum/growth/safetyは整数(1-10)。current_priceとtarget_priceはAI推定値（後工程でリアルタイム株価基準に自動再計算される）。target_priceは現在価格の+15〜+60%の範囲で設定し、ratingが「強気買い」なら+40〜60%・「積極買い」なら+30〜50%・「買い」なら+20〜40%とすること。数倍・数分の一といった非現実的な値は禁止。upsideは含めない。take_profit1・take_profit2・stop_lossは価格のみ（%不要）。改行なしの1行JSONのみ。`;
 
+const JP_RANKING_PROMPT = `あなたは世界トップクラスの株式アナリストです。現時点（2026年6月）での東証上場株式（東京証券取引所・プライム市場）の投資推奨トップ10を作成してください。以下のJSON形式のみで回答（前置き・説明・マークダウン一切不要）:
+{"updated":"2026年6月2日","market_comment":"日本市場環境2〜3文","stocks":[{"rank":1,"ticker":"7203","company":"トヨタ自動車","sector":"自動車","country":"🇯🇵","current_price":"¥3500","target_price":"¥5000","score":9.2,"momentum":9,"growth":9,"safety":7,"catalyst":"EV戦略加速","risk":"円高リスク","reason":"グローバル展開","rating":"強気買い","entry_zone":"¥3400〜¥3450","take_profit1":"¥3800","take_profit2":"¥4500","stop_loss":"¥3200","sell_trigger":"円高急進・業績下方修正","risk_reward":"1:3.2"}]}
+stocksは10件。tickerは4〜5桁の数字のみ（例: 7203, 6758）。ratingは「強気買い」「買い」「積極買い」のいずれか。scoreは小数点1桁(1-10)。momentum/growth/safetyは整数(1-10)。current_priceとtarget_priceはAI推定値（¥表記）。target_priceは現在価格の+15〜+60%の範囲で設定。upsideは含めない。take_profit1・take_profit2・stop_lossは価格のみ（%不要・¥表記）。改行なしの1行JSONのみ。`;
+
 const ANALYSIS_PROMPT = `あなたは世界トップクラスの株式アナリストです。指定銘柄を詳細分析し以下のJSON形式のみで回答（前置き・説明不要）:
 {"ticker":"NVDA","company":"NVIDIA Corporation","sector":"半導体","current_price":"$950","overall_score":82,"buy_rating":"今すぐ買い","entry_zone":"$920〜$945","stop_loss":"$885 -6.8%","take_profit1":"$1020 +7%","take_profit2":"$1100 +15%","take_profit3":"$1200 +26%","hold_period":"2〜4週間","risk_reward":"1:2.8","sell_triggers":["RSI75超え・過熱感","決算ガイダンス下方修正","中国規制強化"],"summary":"Blackwellチップ需要が想定超で...","pros":["AI需要急拡大","高い参入障壁"],"cons":["高バリュエーション","地政学リスク"]}
 buy_ratingは「今すぐ買い」「待て」「見送り」のいずれか。overall_scoreは0〜100の整数。sell_triggersは3〜5件。prosとconsは各2〜3件。改行なしの1行JSONのみ。`;
@@ -277,18 +281,21 @@ async function fetchRankingIndicators(symbols) {
   return result;
 }
 
-function mergeRealPrice(stock, quote, techData) {
+function mergeRealPrice(stock, quote, techData, isJP = false) {
+  const fmtC  = isJP ? n => `¥${Math.round(n).toLocaleString("ja-JP")}` : n => `$${n.toFixed(2)}`;
+  const fmtCI = isJP ? n => `¥${Math.round(n).toLocaleString("ja-JP")}` : n => `$${Math.round(n)}`;
   // quote は { price, dp } オブジェクトまたは null
   const realPrice = quote?.price ?? null;
   const dp        = quote?.dp    ?? null;
   if (!realPrice) {
-    const aiPrice   = stock.current_price ? parseFloat(stock.current_price.replace(/[^0-9.]/g, "")) : null;
-    const targetNum = parseFloat((stock.target_price || "0").replace(/[^0-9.]/g, ""));
+    const aiPrice   = stock.current_price ? parseFloat(stock.current_price.replace(/[^0-9.,]/g, "")) : null;
+    const targetNum = parseFloat((stock.target_price || "0").replace(/[^0-9.,]/g, ""));
     const upsidePct = aiPrice && targetNum ? ((targetNum - aiPrice) / aiPrice * 100) : null;
     return {
       ...stock,
       upside: upsidePct !== null ? `${upsidePct >= 0 ? "+" : ""}${upsidePct.toFixed(1)}%` : null,
       _realPrice: false,
+      _isJP: isJP,
     };
   }
   const p      = realPrice;
@@ -363,29 +370,35 @@ function mergeRealPrice(stock, quote, techData) {
 
   return {
     ...stock,
-    current_price: `$${p.toFixed(2)}`,
-    target_price:  `$${newTargetPrice}`,
+    current_price: fmtC(p),
+    target_price:  fmtCI(newTargetPrice),
     upside:        upsideStr,
-    entry_zone:    `$${entryLow}〜$${entryHigh}`,
-    stop_loss:     `$${stopPrice} ${fmt(stopPct)}`,
-    take_profit1:  `$${tp1Price} ${fmt(tp1Pct)}`,
-    take_profit2:  `$${tp2Price} ${fmt(tp2Pct)}`,
+    entry_zone:    `${fmtCI(entryLow)}〜${fmtCI(entryHigh)}`,
+    stop_loss:     `${fmtCI(stopPrice)} ${fmt(stopPct)}`,
+    take_profit1:  `${fmtCI(tp1Price)} ${fmt(tp1Pct)}`,
+    take_profit2:  `${fmtCI(tp2Price)} ${fmt(tp2Pct)}`,
     risk_reward:   rrStr,
     _realPrice:  true,
     _techBased:  bbands != null,
     _rsi:        rsi,
+    _isJP:       isJP,
   };
 }
 
 // ── Market hours helper ───────────────────────────────────────
-function isMarketOpen() {
+function isMarketOpen(mode = "us") {
   const now = new Date();
   const day = now.getUTCDay(); // 0=Sun, 6=Sat
   if (day === 0 || day === 6) return false;
-  // EDT (UTC-4): Mar-Nov, EST (UTC-5): Nov-Mar (approx)
+  const utcMin = now.getUTCHours() * 60 + now.getUTCMinutes();
+  if (mode === "jp") {
+    // TSE: 9:00-11:30, 12:30-15:30 JST (UTC+9)
+    const jstMin = (utcMin + 9 * 60) % 1440;
+    return (jstMin >= 9 * 60 && jstMin < 11 * 60 + 30) || (jstMin >= 12 * 60 + 30 && jstMin < 15 * 60 + 30);
+  }
+  // NYSE: 9:30-16:00 ET (EDT UTC-4 / EST UTC-5)
   const month = now.getUTCMonth() + 1;
   const etOffset = (month >= 3 && month <= 11) ? 4 : 5;
-  const utcMin = now.getUTCHours() * 60 + now.getUTCMinutes();
   const etMin = ((utcMin - etOffset * 60) % 1440 + 1440) % 1440;
   return etMin >= 9 * 60 + 30 && etMin < 16 * 60;
 }
@@ -403,6 +416,46 @@ function isJPTicker(symbol) {
 
 function formatPrice(price, isJP) {
   return isJP ? `¥${Math.round(price).toLocaleString("ja-JP")}` : `$${price.toFixed(2)}`;
+}
+
+// ── JP quick picks ────────────────────────────────────────────
+const JP_QUICK_PICKS = [
+  { code:"7203", name:"トヨタ" },
+  { code:"6758", name:"ソニー" },
+  { code:"9984", name:"SBG" },
+  { code:"6861", name:"キーエンス" },
+  { code:"8306", name:"三菱UFJ" },
+];
+
+// ── Market Context ────────────────────────────────────────────
+const MarketContext = createContext({ mode:"us", setMode:()=>{} });
+function MarketProvider({ children }) {
+  const [mode, setMode] = useState("us");
+  return <MarketContext.Provider value={{ mode, setMode }}>{children}</MarketContext.Provider>;
+}
+function useMarket() { return useContext(MarketContext); }
+
+// ── Market Toggle ─────────────────────────────────────────────
+function MarketToggle() {
+  const { mode, setMode } = useMarket();
+  return (
+    <div style={{ display:"flex", padding:"3px", background:"#06111a", borderRadius:12, border:"1px solid #0d2030", gap:3, marginTop:8 }}>
+      {[
+        { v:"us", label:"🇺🇸 米国株", color:"#00c9ff" },
+        { v:"jp", label:"🇯🇵 日本株", color:"#a78bfa" },
+      ].map(({ v, label, color }) => (
+        <button key={v} onClick={() => setMode(v)}
+          style={{ flex:1, padding:"7px 0", borderRadius:9,
+            background: mode === v ? `${color}22` : "transparent",
+            border:`1px solid ${mode === v ? color + "55" : "transparent"}`,
+            color: mode === v ? color : "#556677",
+            cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:700,
+            transition:"all 0.2s ease" }}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 // ── Forex Context ─────────────────────────────────────────────
@@ -942,92 +995,112 @@ ${APP_URL}`
 
 // ── Tab 1: Ranking ────────────────────────────────────────────
 function RankingTab() {
+  const { mode } = useMarket();
   const [period, setPeriod] = useState("short");
   const [data, setData] = useState({});
   const [loading, setLoading] = useState({});
   const [expandedId, setExpandedId] = useState(null);
   const [phaseIdx, setPhaseIdx] = useState(0);
-  const [marketOpen, setMarketOpen] = useState(() => isMarketOpen());
+  const [marketOpen, setMarketOpen] = useState(() => isMarketOpen(mode));
   const [priceUpdatedAt, setPriceUpdatedAt] = useState(null);
   const dataRef = useRef({});
   const priceIntervalRef = useRef(null);
   const phaseRef = useRef(null);
-  const phases = ["🌐 市場データを収集中...","📊 ニュース分析中...","🤖 10銘柄を選定中...","📈 スコアリング中...","📡 株価・RSI・BBands取得中...","✅ テクニカル売買戦略を計算中..."];
+  const phases = ["🌐 市場データを収集中...","📊 ニュース分析中...","🤖 10銘柄を選定中...","📈 スコアリング中...","📡 株価取得中...","✅ 売買戦略を計算中..."];
   const cur = PERIODS.find(p=>p.key===period);
   const periodMap = { short:"短期（1〜4週間）スイングトレード向け", mid:"中期（1〜6ヶ月）トレンドフォロー向け", long:"長期（1〜3年）成長投資向け" };
 
   useEffect(() => { dataRef.current = data; }, [data]);
+  useEffect(() => { setExpandedId(null); }, [mode]);
 
-  async function refreshPrices(p) {
-    const current = dataRef.current[p];
+  async function refreshPrices(p, m) {
+    const key = `${m}-${p}`;
+    const current = dataRef.current[key];
     if (!current || current.error || !current._rawStocks) return;
-    const tickers = current._rawStocks.map(s => s.ticker);
+    const isJP = m === "jp";
+    const apiTickers = current._rawStocks.map(s => isJP ? s.ticker + ".T" : s.ticker);
     try {
-      const quotes = await fetchFinnhubBatchPrices(tickers);
+      const quotes = await fetchFinnhubBatchPrices(apiTickers);
       setData(prev => {
-        const c = prev[p];
+        const c = prev[key];
         if (!c || !c._rawStocks) return prev;
         return {
           ...prev,
-          [p]: {
+          [key]: {
             ...c,
-            stocks: c._rawStocks.map(s => mergeRealPrice(s, quotes[s.ticker], c._indicators?.[s.ticker])),
+            stocks: c._rawStocks.map(s => {
+              const t = isJP ? s.ticker + ".T" : s.ticker;
+              return mergeRealPrice(s, quotes[t], c._indicators?.[t], isJP);
+            }),
           },
         };
       });
       setPriceUpdatedAt(new Date());
-      setMarketOpen(isMarketOpen());
+      setMarketOpen(isMarketOpen(m));
     } catch (e) {
       console.warn("[価格更新]", e.message);
     }
   }
 
-  async function fetchRanking(p) {
-    if (data[p]||loading[p]) return;
-    setLoading(prev=>({...prev,[p]:true})); setPhaseIdx(0);
+  async function fetchRanking(p, m) {
+    const key = `${m}-${p}`;
+    if (data[key] || loading[key]) return;
+    const isJP = m === "jp";
+    setLoading(prev=>({...prev,[key]:true})); setPhaseIdx(0);
     phaseRef.current = setInterval(()=>setPhaseIdx(i=>Math.min(i+1, phases.length-2)),1100);
     try {
-      const r = await callAPI(RANKING_PROMPT, `2026年5月時点で${periodMap[p]}のおすすめ米国株トップ10を選定してください。JSONのみ返してください。`);
+      const prompt  = isJP ? JP_RANKING_PROMPT : RANKING_PROMPT;
+      const userMsg = isJP
+        ? `2026年6月時点で${periodMap[p]}の東証上場株式おすすめトップ10を選定してください。JSONのみ返してください。`
+        : `2026年5月時点で${periodMap[p]}のおすすめ米国株トップ10を選定してください。JSONのみ返してください。`;
+      const r = await callAPI(prompt, userMsg);
       clearInterval(phaseRef.current);
       setPhaseIdx(phases.length - 2);
-      const tickers = (r.stocks || []).map(s => s.ticker);
+      const apiTickers = (r.stocks || []).map(s => isJP ? s.ticker + ".T" : s.ticker);
       const [pricesR, indicatorsR] = await Promise.allSettled([
-        fetchFinnhubBatchPrices(tickers),
-        fetchRankingIndicators(tickers),
+        fetchFinnhubBatchPrices(apiTickers),
+        isJP ? Promise.resolve({}) : fetchRankingIndicators(apiTickers),
       ]);
       setPhaseIdx(phases.length - 1);
       const prices     = pricesR.status     === 'fulfilled' ? pricesR.value     : {};
       const indicators = indicatorsR.status === 'fulfilled' ? indicatorsR.value : {};
       const merged = {
         ...r,
-        stocks:      (r.stocks || []).map(s => mergeRealPrice(s, prices[s.ticker], indicators[s.ticker])),
+        stocks: (r.stocks || []).map(s => {
+          const t = isJP ? s.ticker + ".T" : s.ticker;
+          return mergeRealPrice(s, prices[t], indicators[t], isJP);
+        }),
         _rawStocks:  r.stocks || [],
         _indicators: indicators,
       };
-      setData(prev=>({...prev,[p]:merged}));
+      setData(prev=>({...prev,[key]:merged}));
       setPriceUpdatedAt(new Date());
-      setMarketOpen(isMarketOpen());
+      setMarketOpen(isMarketOpen(m));
     }
-    catch(e) { setData(prev=>({...prev,[p]:{error:true,msg:e.message}})); }
-    finally { clearInterval(phaseRef.current); setLoading(prev=>({...prev,[p]:false})); }
+    catch(e) { setData(prev=>({...prev,[`${m}-${p}`]:{error:true,msg:e.message}})); }
+    finally { clearInterval(phaseRef.current); setLoading(prev=>({...prev,[key]:false})); }
   }
 
-  useEffect(()=>{fetchRanking("short");},[]);
-  useEffect(()=>{fetchRanking(period);},[period]);
+  useEffect(()=>{ fetchRanking("short", mode); },[mode]);
+  useEffect(()=>{ fetchRanking(period, mode); },[period, mode]);
 
   // 市場オープン中は30秒ごとに株価を自動更新
   useEffect(() => {
     clearInterval(priceIntervalRef.current);
     priceIntervalRef.current = null;
-    const open = isMarketOpen();
+    const key = `${mode}-${period}`;
+    const open = isMarketOpen(mode);
     setMarketOpen(open);
-    if (open && dataRef.current[period] && !dataRef.current[period].error) {
-      priceIntervalRef.current = setInterval(() => refreshPrices(period), 30 * 1000);
+    if (open && dataRef.current[key] && !dataRef.current[key].error) {
+      priceIntervalRef.current = setInterval(() => refreshPrices(period, mode), 30 * 1000);
     }
     return () => clearInterval(priceIntervalRef.current);
-  }, [period, data[period] != null]);
+  }, [period, mode, data[`${mode}-${period}`] != null]);
 
-  const d=data[period]; const isLoading=loading[period];
+  const key = `${mode}-${period}`;
+  const d = data[key];
+  const isLoading = loading[key];
+  const accentColor = mode === "jp" ? "#a78bfa" : "#00c9ff";
   return (
     <div>
       <div style={{ display:"flex", gap:2, padding:"0 16px" }}>
@@ -1039,7 +1112,7 @@ function RankingTab() {
       </div>
       <div style={{ borderTop:"1px solid #0d2030", padding:"16px 16px 8px" }}>
         {isLoading&&<LoadingDots color={cur.color} phases={phases} phase={phaseIdx}/>}
-        {d?.error&&<ErrBox msg={d.msg} onRetry={()=>{setData(prev=>({...prev,[period]:undefined}));fetchRanking(period);}}/>}
+        {d?.error&&<ErrBox msg={d.msg} onRetry={()=>{setData(prev=>({...prev,[key]:undefined}));fetchRanking(period,mode);}}/>}
         {d&&!d.error&&!isLoading&&(
           <div style={{ animation:"fadeIn .4s ease" }}>
             {/* 市場ステータスバー */}
@@ -1049,7 +1122,7 @@ function RankingTab() {
                   background: marketOpen ? "#00e5a0" : "#7a90a8",
                   animation:  marketOpen ? "pulse 2s infinite" : "none" }}/>
                 <span style={{ fontSize:10, color: marketOpen ? "#00e5a0" : "#7a90a8" }}>
-                  {marketOpen ? "市場オープン · 30秒毎自動更新" : "市場クローズ（前日終値）"}
+                  {marketOpen ? `${mode==="jp"?"東京":"NY"}市場オープン · 30秒毎自動更新` : `${mode==="jp"?"東京":"NY"}市場クローズ（前日終値）`}
                 </span>
               </div>
               <div style={{ display:"flex", alignItems:"center", gap:6 }}>
@@ -1058,7 +1131,7 @@ function RankingTab() {
                     {priceUpdatedAt.toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit",second:"2-digit"})} 更新
                   </span>
                 )}
-                <button onClick={()=>refreshPrices(period)} style={{ background:"#00c9ff0d", border:"1px solid #00c9ff25", borderRadius:4, color:"#7a90a8", cursor:"pointer", fontSize:9, padding:"2px 8px", fontFamily:"inherit" }}>↻ 更新</button>
+                <button onClick={()=>refreshPrices(period,mode)} style={{ background:`${accentColor}0d`, border:`1px solid ${accentColor}25`, borderRadius:4, color:"#7a90a8", cursor:"pointer", fontSize:9, padding:"2px 8px", fontFamily:"inherit" }}>↻ 更新</button>
               </div>
             </div>
             <div style={{ background:`${cur.color}0d`, border:`1px solid ${cur.color}33`, borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
@@ -1066,7 +1139,7 @@ function RankingTab() {
               <div style={{ fontSize:12, color:"#7090a8", lineHeight:1.7 }}>{d.market_comment}</div>
             </div>
             {(d.stocks||[]).map(s=>(
-              <StockCard key={s.rank} stock={s} color={cur.color} marketOpen={marketOpen} expanded={expandedId===`${period}-${s.rank}`} onToggle={()=>setExpandedId(expandedId===`${period}-${s.rank}`?null:`${period}-${s.rank}`)}/>
+              <StockCard key={s.rank} stock={s} color={cur.color} marketOpen={marketOpen} expanded={expandedId===`${key}-${s.rank}`} onToggle={()=>setExpandedId(expandedId===`${key}-${s.rank}`?null:`${key}-${s.rank}`)}/>
             ))}
             <Disclaimer/>
           </div>
@@ -1079,6 +1152,7 @@ function RankingTab() {
 // ── Tab 2: Analysis ───────────────────────────────────────────
 function AnalysisTab({ initialTicker }) {
   const { rate } = useForex();
+  const { mode } = useMarket();
   const [ticker, setTicker] = useState(initialTicker||"");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -1107,7 +1181,19 @@ function AnalysisTab({ initialTicker }) {
   const vs={"今すぐ買い":{color:"#00e5a0",bg:"#00e5a015",border:"#00e5a040"},"待て":{color:"#ffd700",bg:"#ffd70015",border:"#ffd70040"},"見送り":{color:"#ff4d6d",bg:"#ff4d6d15",border:"#ff4d6d40"}};
   return (
     <div style={{ padding:"16px 16px 8px" }}>
-      <InputRow value={ticker} onChange={setTicker} onEnter={()=>doAnalyze()} placeholder="ティッカー例: NVDA, AAPL, 7203, 6758" loading={loading} btnLabel="分析する"/>
+      <InputRow value={ticker} onChange={setTicker} onEnter={()=>doAnalyze()}
+        placeholder={mode==="jp" ? "ティッカー例: 7203, 6758, 9984" : "ティッカー例: NVDA, AAPL, TSLA"}
+        loading={loading} btnLabel="分析する"/>
+      {mode==="jp"&&!loading&&(
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:12 }}>
+          {JP_QUICK_PICKS.map(s=>(
+            <button key={s.code} onClick={()=>doAnalyze(s.code)}
+              style={{ padding:"5px 10px", background:"#a78bfa18", border:"1px solid #a78bfa40", borderRadius:8, color:"#a78bfa", cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:700, transition:"all 0.15s" }}>
+              {s.name} <span style={{ opacity:.6 }}>{s.code}</span>
+            </button>
+          ))}
+        </div>
+      )}
       {loading&&<LoadingDots color="#00c9ff" phases={phases} phase={phase}/>}
       {error&&<ErrBox msg={error}/>}
       {result&&!loading&&(()=>{
@@ -1408,6 +1494,7 @@ function MacroTab() {
 
 // ── Tab 5: Watchlist ──────────────────────────────────────────
 function WatchlistTab({ onAnalyze }) {
+  const { mode } = useMarket();
   const [items, setItems] = useState(()=>{try{return JSON.parse(localStorage.getItem("watchlist")||"[]");}catch{return[];}});
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ticker:"",memo:""});
@@ -1420,7 +1507,19 @@ function WatchlistTab({ onAnalyze }) {
       <button onClick={()=>setShowForm(!showForm)} style={{ width:"100%", padding:"10px", background:"#ffd70015", border:"1px solid #ffd70040", borderRadius:8, color:"#ffd700", cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:700, marginBottom:16 }}>⭐ + 銘柄を追加</button>
       {showForm&&(
         <div style={{ background:"#09141e", border:"1px solid #0d2535", borderRadius:10, padding:14, marginBottom:16, animation:"fadeIn .2s ease" }}>
-          <input value={form.ticker} onChange={e=>setForm(f=>({...f,ticker:e.target.value.toUpperCase()}))} placeholder="ティッカー (例: NVDA, 7203)" style={{ width:"100%", background:"#04090f", border:"1px solid #0d2535", borderRadius:6, padding:"8px 10px", color:"#e8f4ff", fontFamily:"inherit", fontSize:13, outline:"none", marginBottom:8 }}/>
+          <input value={form.ticker} onChange={e=>setForm(f=>({...f,ticker:e.target.value.toUpperCase()}))}
+            placeholder={mode==="jp" ? "ティッカー (例: 7203, 6758)" : "ティッカー (例: NVDA, AAPL)"}
+            style={{ width:"100%", background:"#04090f", border:"1px solid #0d2535", borderRadius:6, padding:"8px 10px", color:"#e8f4ff", fontFamily:"inherit", fontSize:13, outline:"none", marginBottom:8 }}/>
+          {mode==="jp"&&(
+            <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:8 }}>
+              {JP_QUICK_PICKS.map(s=>(
+                <button key={s.code} onClick={()=>setForm(f=>({...f,ticker:s.code}))}
+                  style={{ padding:"4px 8px", background:"#a78bfa15", border:"1px solid #a78bfa35", borderRadius:6, color:"#a78bfa", cursor:"pointer", fontFamily:"inherit", fontSize:10, fontWeight:700 }}>
+                  {s.name}
+                </button>
+              ))}
+            </div>
+          )}
           <textarea value={form.memo} onChange={e=>setForm(f=>({...f,memo:e.target.value}))} placeholder="メモ（任意）" style={{ width:"100%", background:"#04090f", border:"1px solid #0d2535", borderRadius:6, padding:"8px 10px", color:"#e8f4ff", fontFamily:"inherit", fontSize:12, outline:"none", resize:"none", height:60, marginBottom:8 }}/>
           <button onClick={addItem} style={{ width:"100%", padding:"8px", background:"#ffd70022", border:"1px solid #ffd70055", borderRadius:6, color:"#ffd700", cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:700 }}>追加する</button>
         </div>
@@ -2514,6 +2613,7 @@ function InfoCenterTab() {
 
 // ── Tab 10: Alert ─────────────────────────────────────────────
 function AlertTab() {
+  const { mode } = useMarket();
   const [alerts, setAlerts]     = useState([]);
   const [loading, setLoading]   = useState(true);
   const [email, setEmail]       = useState(() => localStorage.getItem("kabuai_alert_email") || "");
@@ -2617,9 +2717,19 @@ function AlertTab() {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
           <div>
             <label style={lbl}>銘柄ティッカー</label>
-            <input style={input} placeholder="NVDA" value={ticker}
+            <input style={input} placeholder={mode==="jp" ? "7203" : "NVDA"} value={ticker}
               onChange={e => setTicker(e.target.value.toUpperCase())}
               onKeyDown={e => e.key === "Enter" && addAlert()} />
+            {mode==="jp"&&(
+              <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginTop:6 }}>
+                {JP_QUICK_PICKS.map(s=>(
+                  <button key={s.code} onClick={()=>setTicker(s.code)}
+                    style={{ padding:"3px 7px", background:"#a78bfa15", border:"1px solid #a78bfa35", borderRadius:5, color:"#a78bfa", cursor:"pointer", fontFamily:"inherit", fontSize:10 }}>
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div>
             <label style={lbl}>目標株価（{isJPTicker(ticker) ? "JPY 円" : "USD"}）</label>
@@ -2737,6 +2847,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <ForexProvider>
+      <MarketProvider>
       <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"'Courier New', monospace", color:"#c8d8e8", paddingBottom:72 }}>
         {showDisclaimer && <DisclaimerModal onAccept={acceptDisclaimer}/>}
         {showPremium   && <PremiumModal onClose={() => setShowPremium(false)}/>}
@@ -2772,6 +2883,7 @@ export default function App() {
             <h1 style={{ margin:0, fontSize:"clamp(22px,5vw,32px)", fontWeight:900, color:"#eaf4ff", letterSpacing:-1 }}>
               Kabu<span style={{ color:"#00e5a0" }}>.AI</span>
             </h1>
+            <MarketToggle/>
             <ForexBadge/>
           </div>
         </div>
@@ -2799,6 +2911,7 @@ export default function App() {
           ))}
         </nav>
       </div>
+      </MarketProvider>
       </ForexProvider>
     </ErrorBoundary>
   );
