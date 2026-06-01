@@ -377,6 +377,19 @@ function mergeRealPrice(stock, quote, techData) {
   };
 }
 
+// ── Market hours helper ───────────────────────────────────────
+function isMarketOpen() {
+  const now = new Date();
+  const day = now.getUTCDay(); // 0=Sun, 6=Sat
+  if (day === 0 || day === 6) return false;
+  // EDT (UTC-4): Mar-Nov, EST (UTC-5): Nov-Mar (approx)
+  const month = now.getUTCMonth() + 1;
+  const etOffset = (month >= 3 && month <= 11) ? 4 : 5;
+  const utcMin = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const etMin = ((utcMin - etOffset * 60) % 1440 + 1440) % 1440;
+  return etMin >= 9 * 60 + 30 && etMin < 16 * 60;
+}
+
 // ── Forex Context ─────────────────────────────────────────────
 const ForexContext = createContext({ rate: null, updatedAt: null, loading: false, pendingSec: null, refetch: () => {} });
 
@@ -787,8 +800,12 @@ function XShareBtn({ text, style }) {
 }
 
 // ── StockCard ─────────────────────────────────────────────────
-function StockCard({ stock, color, expanded, onToggle }) {
+function StockCard({ stock, color, expanded, onToggle, marketOpen }) {
   const rc = { "強気買い":"#00e5a0","買い":"#60d0a0","積極買い":"#40c4ff" }[stock.rating]||"#00e5a0";
+  const priceLabel = stock._realPrice ? (marketOpen ? "RT" : "前日終値") : "AI推定";
+  const priceBadgeBg    = stock._realPrice ? (marketOpen ? "#00c9ff22" : "#ffd70018") : "#ffffff08";
+  const priceBadgeColor = stock._realPrice ? (marketOpen ? "#00c9ff"   : "#ffd700")   : "#7a90a8";
+  const priceBadgeBorder= stock._realPrice ? (marketOpen ? "#00c9ff33" : "#ffd70035") : "#0d2030";
   return (
     <div onClick={onToggle} style={{ background:expanded?"#0f1e2d":"#09141e", border:`1px solid ${expanded?color+"55":"#0d2030"}`, borderRadius:12, padding:"14px 16px", cursor:"pointer", marginBottom:8, position:"relative", overflow:"hidden" }}>
       {expanded&&<div style={{ position:"absolute", top:0, left:0, right:0, height:2, background:`linear-gradient(90deg,transparent,${color},transparent)` }}/>}
@@ -809,10 +826,10 @@ function StockCard({ stock, color, expanded, onToggle }) {
               {stock.current_price || "—"}
             </span>
             <span style={{ fontSize:8, padding:"1px 4px",
-              background: stock._realPrice ? "#00c9ff22" : "#ffffff08",
-              color:       stock._realPrice ? "#00c9ff"   : "#7a90a8",
-              borderRadius:3, border:`1px solid ${stock._realPrice?"#00c9ff33":"#0d2030"}` }}>
-              {stock._realPrice ? "RT" : "AI推定"}
+              background: priceBadgeBg,
+              color:       priceBadgeColor,
+              borderRadius:3, border:`1px solid ${priceBadgeBorder}` }}>
+              {priceLabel}
             </span>
           </div>
           <div style={{ fontSize:12, color:String(stock.upside||"").startsWith("-")?"#ff4d6d":"#00e5a0", fontWeight:700 }}>
@@ -915,10 +932,41 @@ function RankingTab() {
   const [loading, setLoading] = useState({});
   const [expandedId, setExpandedId] = useState(null);
   const [phaseIdx, setPhaseIdx] = useState(0);
+  const [marketOpen, setMarketOpen] = useState(() => isMarketOpen());
+  const [priceUpdatedAt, setPriceUpdatedAt] = useState(null);
+  const dataRef = useRef({});
+  const priceIntervalRef = useRef(null);
   const phaseRef = useRef(null);
   const phases = ["🌐 市場データを収集中...","📊 ニュース分析中...","🤖 10銘柄を選定中...","📈 スコアリング中...","📡 株価・RSI・BBands取得中...","✅ テクニカル売買戦略を計算中..."];
   const cur = PERIODS.find(p=>p.key===period);
   const periodMap = { short:"短期（1〜4週間）スイングトレード向け", mid:"中期（1〜6ヶ月）トレンドフォロー向け", long:"長期（1〜3年）成長投資向け" };
+
+  useEffect(() => { dataRef.current = data; }, [data]);
+
+  async function refreshPrices(p) {
+    const current = dataRef.current[p];
+    if (!current || current.error || !current._rawStocks) return;
+    const tickers = current._rawStocks.map(s => s.ticker);
+    try {
+      const quotes = await fetchFinnhubBatchPrices(tickers);
+      setData(prev => {
+        const c = prev[p];
+        if (!c || !c._rawStocks) return prev;
+        return {
+          ...prev,
+          [p]: {
+            ...c,
+            stocks: c._rawStocks.map(s => mergeRealPrice(s, quotes[s.ticker], c._indicators?.[s.ticker])),
+          },
+        };
+      });
+      setPriceUpdatedAt(new Date());
+      setMarketOpen(isMarketOpen());
+    } catch (e) {
+      console.warn("[価格更新]", e.message);
+    }
+  }
+
   async function fetchRanking(p) {
     if (data[p]||loading[p]) return;
     setLoading(prev=>({...prev,[p]:true})); setPhaseIdx(0);
@@ -928,7 +976,6 @@ function RankingTab() {
       clearInterval(phaseRef.current);
       setPhaseIdx(phases.length - 2);
       const tickers = (r.stocks || []).map(s => s.ticker);
-      // Finnhub(株価) と Twelve Data(RSI・BBands) を並列取得
       const [pricesR, indicatorsR] = await Promise.allSettled([
         fetchFinnhubBatchPrices(tickers),
         fetchRankingIndicators(tickers),
@@ -936,14 +983,35 @@ function RankingTab() {
       setPhaseIdx(phases.length - 1);
       const prices     = pricesR.status     === 'fulfilled' ? pricesR.value     : {};
       const indicators = indicatorsR.status === 'fulfilled' ? indicatorsR.value : {};
-      const merged = { ...r, stocks: (r.stocks || []).map(s => mergeRealPrice(s, prices[s.ticker], indicators[s.ticker])) };
+      const merged = {
+        ...r,
+        stocks:      (r.stocks || []).map(s => mergeRealPrice(s, prices[s.ticker], indicators[s.ticker])),
+        _rawStocks:  r.stocks || [],
+        _indicators: indicators,
+      };
       setData(prev=>({...prev,[p]:merged}));
+      setPriceUpdatedAt(new Date());
+      setMarketOpen(isMarketOpen());
     }
     catch(e) { setData(prev=>({...prev,[p]:{error:true,msg:e.message}})); }
     finally { clearInterval(phaseRef.current); setLoading(prev=>({...prev,[p]:false})); }
   }
+
   useEffect(()=>{fetchRanking("short");},[]);
   useEffect(()=>{fetchRanking(period);},[period]);
+
+  // 市場オープン中は30秒ごとに株価を自動更新
+  useEffect(() => {
+    clearInterval(priceIntervalRef.current);
+    priceIntervalRef.current = null;
+    const open = isMarketOpen();
+    setMarketOpen(open);
+    if (open && dataRef.current[period] && !dataRef.current[period].error) {
+      priceIntervalRef.current = setInterval(() => refreshPrices(period), 30 * 1000);
+    }
+    return () => clearInterval(priceIntervalRef.current);
+  }, [period, data[period] != null]);
+
   const d=data[period]; const isLoading=loading[period];
   return (
     <div>
@@ -959,12 +1027,31 @@ function RankingTab() {
         {d?.error&&<ErrBox msg={d.msg} onRetry={()=>{setData(prev=>({...prev,[period]:undefined}));fetchRanking(period);}}/>}
         {d&&!d.error&&!isLoading&&(
           <div style={{ animation:"fadeIn .4s ease" }}>
+            {/* 市場ステータスバー */}
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10, padding:"6px 10px", background:"#06111a", borderRadius:8, border:"1px solid #0d2030" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                <span style={{ width:6, height:6, borderRadius:"50%", display:"inline-block",
+                  background: marketOpen ? "#00e5a0" : "#7a90a8",
+                  animation:  marketOpen ? "pulse 2s infinite" : "none" }}/>
+                <span style={{ fontSize:10, color: marketOpen ? "#00e5a0" : "#7a90a8" }}>
+                  {marketOpen ? "市場オープン · 30秒毎自動更新" : "市場クローズ（前日終値）"}
+                </span>
+              </div>
+              <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                {priceUpdatedAt&&(
+                  <span style={{ fontSize:9, color:"#445566" }}>
+                    {priceUpdatedAt.toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit",second:"2-digit"})} 更新
+                  </span>
+                )}
+                <button onClick={()=>refreshPrices(period)} style={{ background:"#00c9ff0d", border:"1px solid #00c9ff25", borderRadius:4, color:"#7a90a8", cursor:"pointer", fontSize:9, padding:"2px 8px", fontFamily:"inherit" }}>↻ 更新</button>
+              </div>
+            </div>
             <div style={{ background:`${cur.color}0d`, border:`1px solid ${cur.color}33`, borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
               <div style={{ fontSize:9, color:cur.color, letterSpacing:3, marginBottom:4 }}>AI MARKET COMMENT</div>
               <div style={{ fontSize:12, color:"#7090a8", lineHeight:1.7 }}>{d.market_comment}</div>
             </div>
             {(d.stocks||[]).map(s=>(
-              <StockCard key={s.rank} stock={s} color={cur.color} expanded={expandedId===`${period}-${s.rank}`} onToggle={()=>setExpandedId(expandedId===`${period}-${s.rank}`?null:`${period}-${s.rank}`)}/>
+              <StockCard key={s.rank} stock={s} color={cur.color} marketOpen={marketOpen} expanded={expandedId===`${period}-${s.rank}`} onToggle={()=>setExpandedId(expandedId===`${period}-${s.rank}`?null:`${period}-${s.rank}`)}/>
             ))}
             <Disclaimer/>
           </div>
