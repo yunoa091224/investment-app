@@ -500,7 +500,7 @@ function ForexProvider({ children }) {
   const [isFallback, setIsFallback] = useState(false);
   const timerRef = useRef(null);
 
-  // フォールバックチェーン: Twelve Data → Finnhub → 固定値150.0
+  // フォールバックチェーン: Frankfurter → Twelve Data → Finnhub → 固定値150.0
   // 戻り値: true=実レート取得成功 / false=フォールバック使用
   async function fetchRate() {
     const KEY12 = import.meta.env.VITE_TWELVE_DATA_KEY;
@@ -509,8 +509,20 @@ function ForexProvider({ children }) {
     let realRate = null;
 
     try {
-      // 1. Twelve Data
-      if (KEY12) {
+      // 1. Frankfurter（キー不要・無制限・最優先）
+      try {
+        const res  = await fetch("https://api.frankfurter.app/latest?from=USD&to=JPY");
+        const data = await res.json();
+        const jpy  = data?.rates?.JPY;
+        if (jpy && jpy > 0) {
+          realRate = parseFloat(jpy);
+        } else {
+          console.warn("[Frankfurter] unexpected response:", data);
+        }
+      } catch (e) { console.warn("[Frankfurter] fetch failed:", e.message); }
+
+      // 2. Twelve Data
+      if (!realRate && KEY12) {
         try {
           const res  = await fetch(`https://api.twelvedata.com/price?symbol=USD/JPY&apikey=${KEY12}`);
           const data = await res.json();
@@ -522,7 +534,7 @@ function ForexProvider({ children }) {
         } catch (e) { console.warn("[TwelveData] forex fetch:", e.message); }
       }
 
-      // 2. Finnhub forex
+      // 3. Finnhub forex
       if (!realRate && FKEY) {
         try {
           const res  = await fetch(`https://finnhub.io/api/v1/forex/rates?base=USD&token=${FKEY}`);
@@ -536,7 +548,7 @@ function ForexProvider({ children }) {
         } catch (e) { console.warn("[Finnhub] forex fetch:", e.message); }
       }
 
-      // 3. 固定フォールバック
+      // 4. 固定フォールバック
       const final = realRate ?? FOREX_FALLBACK;
       setRate(final);
       setUpdatedAt(new Date());
@@ -557,14 +569,13 @@ function ForexProvider({ children }) {
   }
 
   useEffect(() => {
-    // 5秒後に初回取得（他APIとの競合を最小限に抑えつつ即座に表示）
-    const firstTimer = setTimeout(async () => {
+    // Frankfurterは別サービスのため即座に取得（他APIと競合しない）
+    (async () => {
       const ok = await fetchRate();
       schedule(ok);
-    }, 5 * 1000);
+    })();
 
     return () => {
-      clearTimeout(firstTimer);
       clearTimeout(timerRef.current);
     };
   }, []);
