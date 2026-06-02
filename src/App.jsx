@@ -23,6 +23,66 @@ class ErrorBoundary extends Component {
   }
 }
 
+// ── TwelveData レート制限管理 (7req/分 + 15分キャッシュ) ─────────────────────
+const _tdCache = new Map();
+const _tdReqLog = [];
+const _tdQueue = [];
+const _TD_MAX = 7;
+const _TD_CACHE_TTL = 15 * 60 * 1000;
+let _tdTimer = null;
+
+function _tdCacheGet(key) {
+  const e = _tdCache.get(key);
+  if (!e) return null;
+  if (Date.now() > e.exp) { _tdCache.delete(key); return null; }
+  return e.data;
+}
+function _tdCacheSet(key, data) {
+  _tdCache.set(key, { data, exp: Date.now() + _TD_CACHE_TTL });
+}
+function _tdWaitMs() {
+  const now = Date.now(), cut = now - 60000;
+  while (_tdReqLog.length && _tdReqLog[0] < cut) _tdReqLog.shift();
+  if (_tdReqLog.length < _TD_MAX) return 0;
+  return _tdReqLog[0] + 60000 - now + 200;
+}
+function _tdDrain() {
+  if (_tdTimer || !_tdQueue.length) return;
+  const wait = _tdWaitMs();
+  _tdTimer = setTimeout(async () => {
+    _tdTimer = null;
+    const item = _tdQueue.shift();
+    if (!item) { _tdDrain(); return; }
+    _tdReqLog.push(Date.now());
+    try {
+      const r = await fetch(item.url);
+      if (r.status === 429) {
+        item.resolve({ _rateLimit: true });
+        setTimeout(_tdDrain, 61000);
+        return;
+      }
+      const data = await r.json();
+      if (data?.code === 429) {
+        item.resolve({ _rateLimit: true });
+        setTimeout(_tdDrain, 61000);
+        return;
+      }
+      _tdCacheSet(item.cacheKey, data);
+      item.resolve(data);
+    } catch (e) { item.reject(e); }
+    _tdDrain();
+  }, wait);
+}
+function tdFetch(url, cacheKey) {
+  const cached = _tdCacheGet(cacheKey);
+  if (cached !== null) return Promise.resolve(cached);
+  return new Promise((resolve, reject) => {
+    _tdQueue.push({ url, cacheKey, resolve, reject });
+    _tdDrain();
+  });
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 const PERIODS = [
   { key:"short", label:"短期", sub:"1〜4週間", icon:"⚡", color:"#ff6b35" },
   { key:"mid",   label:"中期", sub:"1〜6ヶ月", icon:"📈", color:"#00c9ff" },
@@ -289,11 +349,11 @@ async function fetchRankingIndicators(symbols) {
   const B    = "https://api.twelvedata.com";
   const syms = symbols.join(",");
   const [rsiR, bbandsR] = await Promise.allSettled([
-    fetch(`${B}/rsi?symbol=${syms}&interval=1day&apikey=${KEY}`).then(r => r.json()),
-    fetch(`${B}/bbands?symbol=${syms}&interval=1day&apikey=${KEY}`).then(r => r.json()),
+    tdFetch(`${B}/rsi?symbol=${syms}&interval=1day&apikey=${KEY}`, `rsi:${syms}`),
+    tdFetch(`${B}/bbands?symbol=${syms}&interval=1day&apikey=${KEY}`, `bbands:${syms}`),
   ]);
-  const rsiRaw    = rsiR.status    === 'fulfilled' ? rsiR.value    : {};
-  const bbandsRaw = bbandsR.status === 'fulfilled' ? bbandsR.value : {};
+  const rsiRaw    = rsiR.status === 'fulfilled' && !rsiR.value?._rateLimit ? rsiR.value : {};
+  const bbandsRaw = bbandsR.status === 'fulfilled' && !bbandsR.value?._rateLimit ? bbandsR.value : {};
   const result = {};
   for (const sym of symbols) {
     // 単一銘柄: response.values[] / 複数銘柄: response[sym].values[]
@@ -1689,6 +1749,9 @@ function TechnicalTab() {
   const [error, setError] = useState(null);
   const [phase, setPhase] = useState(0);
   const [realData, setRealData] = useState(null);
+  const [retryIn, setRetryIn] = useState(null);
+  const retryTimerRef = useRef(null);
+  const countdownRef = useRef(null);
   const phases = [
     "📡 リアルタイムデータ取得中...",
     "📊 インジケーター解析中...",
@@ -1701,13 +1764,17 @@ function TechnicalTab() {
     const B = "https://api.twelvedata.com";
     // RSI/MACD/BBandsはTwelve Data、株価はFinnhubから取得
     const [rsiR, macdR, sma50R, sma200R, bbandsR] = await Promise.allSettled([
-      fetch(`${B}/rsi?symbol=${symbol}&interval=1day&apikey=${KEY}`).then(r => r.json()),
-      fetch(`${B}/macd?symbol=${symbol}&interval=1day&apikey=${KEY}`).then(r => r.json()),
-      fetch(`${B}/sma?symbol=${symbol}&interval=1day&time_period=50&apikey=${KEY}`).then(r => r.json()),
-      fetch(`${B}/sma?symbol=${symbol}&interval=1day&time_period=200&apikey=${KEY}`).then(r => r.json()),
-      fetch(`${B}/bbands?symbol=${symbol}&interval=1day&apikey=${KEY}`).then(r => r.json()),
+      tdFetch(`${B}/rsi?symbol=${symbol}&interval=1day&apikey=${KEY}`, `rsi:${symbol}`),
+      tdFetch(`${B}/macd?symbol=${symbol}&interval=1day&apikey=${KEY}`, `macd:${symbol}`),
+      tdFetch(`${B}/sma?symbol=${symbol}&interval=1day&time_period=50&apikey=${KEY}`, `sma50:${symbol}`),
+      tdFetch(`${B}/sma?symbol=${symbol}&interval=1day&time_period=200&apikey=${KEY}`, `sma200:${symbol}`),
+      tdFetch(`${B}/bbands?symbol=${symbol}&interval=1day&apikey=${KEY}`, `bbands:${symbol}`),
     ]);
-    const ok = r => r.status === "fulfilled" && r.value?.status !== "error";
+    const rateLimited = [rsiR, macdR, sma50R, sma200R, bbandsR].some(
+      r => r.status === 'fulfilled' && r.value?._rateLimit
+    );
+    if (rateLimited) return { _rateLimit: true, rsi:null, macd:null, sma50:null, sma200:null, bbands:null, fetched:0, total:5 };
+    const ok = r => r.status === "fulfilled" && r.value?.status !== "error" && !r.value?._rateLimit;
     const rsi    = ok(rsiR)    && rsiR.value.values?.[0]    ? parseFloat(rsiR.value.values[0].rsi).toFixed(1)    : null;
     const macd   = ok(macdR)   && macdR.value.values?.[0]   ? macdR.value.values[0]                             : null;
     const sma50  = ok(sma50R)  && sma50R.value.values?.[0]  ? parseFloat(sma50R.value.values[0].sma).toFixed(2) : null;
@@ -1719,6 +1786,9 @@ function TechnicalTab() {
 
   async function analyze() {
     const t = ticker.trim().toUpperCase(); if (!t) return;
+    clearTimeout(retryTimerRef.current);
+    clearInterval(countdownRef.current);
+    setRetryIn(null);
     setLoading(true); setResult(null); setError(null); setRealData(null);
 
     // Step 1: Finnhub(株価) と Twelve Data(インジケーター) を並列取得
@@ -1732,6 +1802,21 @@ function TechnicalTab() {
       const price = finnhubR.status === 'fulfilled' ? finnhubR.value : null;
       const ind = twelveR.status === 'fulfilled' ? twelveR.value
         : { rsi:null, macd:null, sma50:null, sma200:null, bbands:null, fetched:0, total:5 };
+
+      if (ind._rateLimit) {
+        setRealData({ _rateLimit: true });
+        setLoading(false);
+        let sec = 60;
+        setRetryIn(sec);
+        countdownRef.current = setInterval(() => {
+          sec -= 1;
+          setRetryIn(sec);
+          if (sec <= 0) clearInterval(countdownRef.current);
+        }, 1000);
+        retryTimerRef.current = setTimeout(() => analyze(), 60000);
+        return;
+      }
+
       td = {
         price: price != null ? String(price) : null,
         ...ind,
@@ -1771,6 +1856,19 @@ function TechnicalTab() {
 
   function DataBadge() {
     if (!realData) return null;
+    if (realData._rateLimit) return (
+      <div style={{ display:"flex", flexDirection:"column", gap:6, padding:"10px 14px", background:"#ff4d6d10", border:"1px solid #ff4d6d40", borderRadius:10, marginBottom:12 }}>
+        <div style={{ display:"inline-flex", alignItems:"center", gap:6 }}>
+          <span style={{ width:6, height:6, borderRadius:"50%", background:"#ffd700", display:"inline-block", animation:"pulse 1.5s infinite" }}/>
+          <span style={{ fontSize:10, color:"#ffd700", fontWeight:700 }}>⏳ データ取得中... APIレート制限に達しました</span>
+        </div>
+        {retryIn !== null && (
+          <span style={{ fontSize:10, color:"#7a90a8" }}>
+            {retryIn > 0 ? `${retryIn}秒後に自動で再試行します` : "再試行中..."}
+          </span>
+        )}
+      </div>
+    );
     const { fetched, total } = realData;
     const [color, text] = fetched === total
       ? ["#00e5a0", "📡 リアルタイムデータ取得済み"]
@@ -1789,6 +1887,7 @@ function TechnicalTab() {
     <div style={{ padding:"16px 16px 8px" }}>
       <InputRow value={ticker} onChange={setTicker} onEnter={analyze} placeholder="ティッカー例: NVDA, AAPL" loading={loading} btnLabel="分析する" btnColor="#a78bfa"/>
       {loading && <LoadingDots color="#a78bfa" phases={phases} phase={phase}/>}
+      {realData?._rateLimit && !loading && <DataBadge/>}
       {error && <ErrBox msg={error}/>}
       {result && !loading && (
         <div style={{ animation:"fadeIn .3s ease" }}>
