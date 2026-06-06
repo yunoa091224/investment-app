@@ -1037,10 +1037,30 @@ function XShareBtn({ text, style }) {
 function BacktestBanner() {
   const [open, setOpen] = useState(true);
   const { mode } = useMarket();
+  const [liveStats, setLiveStats] = useState(null);
 
-  const US_DATA = { pnl: "146.5万円", winRate: "50%",   trades: 36, scope: "全10銘柄" };
-  const JP_DATA = { pnl: "44.6万円",  winRate: "64.3%", trades: 14, scope: "上位5銘柄" };
-  const cur = mode === "jp" ? JP_DATA : US_DATA;
+  useEffect(() => {
+    fetch("/api/score-history")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.us && d?.jp) setLiveStats(d); })
+      .catch(() => {});
+  }, []);
+
+  const STATIC_US = { pnl: "+146.5万円", winRate: "50%",   wrNum: 50,   trades: 36, scope: "全10銘柄" };
+  const STATIC_JP = { pnl: "+44.6万円",  winRate: "64.3%", wrNum: 64.3, trades: 14, scope: "上位5銘柄" };
+
+  const buildStat = (live, staticFallback) => {
+    if (live?.hasData && live.totalTrades > 0) {
+      const absVal = (Math.abs(live.totalPnl) / 10000).toFixed(1);
+      const pnlJPY = live.totalPnl >= 0 ? `+${absVal}万円` : `-${absVal}万円`;
+      return { pnl: pnlJPY, winRate: `${live.winRate}%`, wrNum: live.winRate, trades: live.totalTrades, scope: staticFallback.scope, isLive: true };
+    }
+    return { ...staticFallback, isLive: false };
+  };
+
+  const usData = buildStat(liveStats?.us, STATIC_US);
+  const jpData = buildStat(liveStats?.jp, STATIC_JP);
+  const cur = mode === "jp" ? jpData : usData;
   const accentColor = mode === "jp" ? "#a78bfa" : "#00c9ff";
 
   const strategies = [
@@ -1051,8 +1071,8 @@ function BacktestBanner() {
   ];
 
   const stats = [
-    { label: "米国株短期", scope: "全10銘柄対象", pnl: "+146.5万円", wr: "50%",   wrNum: 50,   color: "#00c9ff" },
-    { label: "日本株短期", scope: "上位5銘柄",    pnl: "+44.6万円",  wr: "64.3%", wrNum: 64.3, color: "#a78bfa" },
+    { label: "米国株短期", scope: usData.scope, pnl: usData.pnl, wr: usData.winRate, wrNum: usData.wrNum, color: "#00c9ff", isLive: usData.isLive, trades: usData.trades },
+    { label: "日本株短期", scope: jpData.scope, pnl: jpData.pnl, wr: jpData.winRate, wrNum: jpData.wrNum, color: "#a78bfa", isLive: jpData.isLive, trades: jpData.trades },
   ];
 
   return (
@@ -1077,10 +1097,10 @@ function BacktestBanner() {
           <span style={{ fontSize: 14 }}>📊</span>
           <div style={{ textAlign: "left" }}>
             <div style={{ fontSize: 11, fontWeight: 800, color: "#e8f4ff", lineHeight: 1.2 }}>
-              バックテスト検証済み｜推奨戦略
+              {cur.isLive ? "AI予測実績（ライブ）｜推奨戦略" : "バックテスト検証済み｜推奨戦略"}
             </div>
             <div style={{ fontSize: 9, color: accentColor, fontWeight: 700, letterSpacing: 1, marginTop: 2 }}>
-              2024年6月〜2025年6月 実績データ
+              {cur.isLive ? `${cur.trades}トレード蓄積 · リアルタイム集計` : "2024年6月〜2025年6月 実績データ"}
             </div>
           </div>
         </div>
@@ -1090,7 +1110,7 @@ function BacktestBanner() {
             background: `${accentColor}15`, border: `1px solid ${accentColor}35`,
             fontSize: 9, fontWeight: 800, color: accentColor,
           }}>
-            {mode === "jp" ? `勝率${JP_DATA.winRate}` : `勝率${US_DATA.winRate}`}
+            勝率{cur.winRate}
           </div>
           <span style={{ fontSize: 12, color: "#445566", transform: open ? "rotate(180deg)" : "none", transition: "transform .25s ease", display: "inline-block" }}>▼</span>
         </div>
@@ -1126,13 +1146,16 @@ function BacktestBanner() {
                 borderRadius: 10, padding: "10px 12px",
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
-                  <div style={{ fontSize: 9, color: s.color, fontWeight: 700, letterSpacing: 1 }}>{s.label}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <div style={{ fontSize: 9, color: s.color, fontWeight: 700, letterSpacing: 1 }}>{s.label}</div>
+                    {s.isLive && <div style={{ fontSize: 7, color: "#00e5a0", background: "#00e5a015", border: "1px solid #00e5a030", padding: "1px 4px", borderRadius: 3, fontWeight: 800 }}>LIVE</div>}
+                  </div>
                   <div style={{ fontSize: 8, color: "#445566", background: "#0d2535", padding: "1px 6px", borderRadius: 4 }}>{s.scope}</div>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
                   <div>
                     <div style={{ fontSize: 17, fontWeight: 900, color: "#00e5a0", lineHeight: 1 }}>{s.pnl}</div>
-                    <div style={{ fontSize: 9, color: "#445566", marginTop: 2 }}>総損益（初期1,000万円）</div>
+                    <div style={{ fontSize: 9, color: "#445566", marginTop: 2 }}>{s.isLive ? `総損益（${s.trades}件検証済）` : "総損益（初期1,000万円）"}</div>
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: 15, fontWeight: 800, color: s.color }}>{s.wr}</div>
@@ -1388,6 +1411,12 @@ function RankingTab() {
       setData(prev=>({...prev,[key]:merged}));
       setPriceUpdatedAt(new Date());
       setMarketOpen(isMarketOpen(m));
+      // スコア履歴を非同期でバックグラウンド保存（失敗しても無視）
+      fetch("/api/score-history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: m, period: p, stocks: merged.stocks }),
+      }).catch(() => {});
     }
     catch(e) { setData(prev=>({...prev,[`${m}-${p}`]:{error:true,msg:e.message}})); }
     finally { clearInterval(phaseRef.current); setLoading(prev=>({...prev,[key]:false})); }
