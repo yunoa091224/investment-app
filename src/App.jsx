@@ -1033,6 +1033,146 @@ function XShareBtn({ text, style }) {
   );
 }
 
+// ── BacktestBanner ────────────────────────────────────────────
+function BacktestBanner() {
+  const [open, setOpen] = useState(true);
+  const { mode } = useMarket();
+
+  const US_DATA = { pnl: "146.5万円", winRate: "50%", trades: 36, period: "短期10日" };
+  const JP_DATA = { pnl: "47.4万円",  winRate: "60%", trades: 30, period: "短期10日" };
+  const cur = mode === "jp" ? JP_DATA : US_DATA;
+  const accentColor = mode === "jp" ? "#a78bfa" : "#00c9ff";
+
+  const strategies = [
+    { icon: "🏆", text: "ランキング上位5銘柄を選ぶ" },
+    { icon: "⚡", text: "短期10日で売買する" },
+    { icon: "🌍", text: "米国株・日本株を分散する" },
+  ];
+
+  const stats = [
+    { label: "米国株短期", pnl: "+146.5万円", wr: "50%", color: "#00c9ff" },
+    { label: "日本株短期", pnl: "+47.4万円",  wr: "60%", color: "#a78bfa" },
+  ];
+
+  return (
+    <div style={{
+      background: "linear-gradient(135deg, #0d1b2a 0%, #091420 100%)",
+      border: `1px solid ${accentColor}33`,
+      borderRadius: 12,
+      marginBottom: 14,
+      overflow: "hidden",
+      boxShadow: `0 0 20px ${accentColor}08`,
+    }}>
+      {/* ヘッダー（折りたたみトグル） */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "11px 14px", background: "transparent", border: "none",
+          cursor: "pointer", fontFamily: "inherit",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 14 }}>📊</span>
+          <div style={{ textAlign: "left" }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: "#e8f4ff", lineHeight: 1.2 }}>
+              バックテスト検証済み｜推奨戦略
+            </div>
+            <div style={{ fontSize: 9, color: accentColor, fontWeight: 700, letterSpacing: 1, marginTop: 2 }}>
+              2024年6月〜2025年6月 実績データ
+            </div>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{
+            padding: "3px 8px", borderRadius: 6,
+            background: `${accentColor}15`, border: `1px solid ${accentColor}35`,
+            fontSize: 9, fontWeight: 800, color: accentColor,
+          }}>
+            {mode === "jp" ? `勝率${JP_DATA.winRate}` : `勝率${US_DATA.winRate}`}
+          </div>
+          <span style={{ fontSize: 12, color: "#445566", transform: open ? "rotate(180deg)" : "none", transition: "transform .25s ease", display: "inline-block" }}>▼</span>
+        </div>
+      </button>
+
+      {/* 展開コンテンツ */}
+      {open && (
+        <div style={{ padding: "0 14px 14px", animation: "fadeIn .25s ease" }}>
+          {/* 区切り */}
+          <div style={{ height: 1, background: `${accentColor}20`, marginBottom: 12 }} />
+
+          {/* 推奨戦略3箇条 */}
+          <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+            {strategies.map((s, i) => (
+              <div key={i} style={{
+                display: "flex", alignItems: "center", gap: 5,
+                padding: "5px 10px", borderRadius: 8,
+                background: "#06111a", border: "1px solid #0d2535",
+                fontSize: 11, color: "#b0cce0", fontWeight: 600,
+                flex: "1 1 auto", minWidth: "calc(33% - 8px)",
+              }}>
+                <span style={{ fontSize: 13 }}>{s.icon}</span>
+                <span>{s.text}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* 実績データ */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+            {stats.map((s, i) => (
+              <div key={i} style={{
+                background: "#06111a", border: `1px solid ${s.color}25`,
+                borderRadius: 10, padding: "10px 12px",
+              }}>
+                <div style={{ fontSize: 9, color: s.color, fontWeight: 700, letterSpacing: 1, marginBottom: 5 }}>{s.label}</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+                  <div>
+                    <div style={{ fontSize: 17, fontWeight: 900, color: "#00e5a0", lineHeight: 1 }}>{s.pnl}</div>
+                    <div style={{ fontSize: 9, color: "#445566", marginTop: 2 }}>総損益（初期1,000万円）</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: s.color }}>{s.wr}</div>
+                    <div style={{ fontSize: 9, color: "#445566" }}>勝率</div>
+                  </div>
+                </div>
+                {/* 勝率バー */}
+                <div style={{ marginTop: 7, height: 3, background: "#0d2535", borderRadius: 2, overflow: "hidden" }}>
+                  <div style={{
+                    height: "100%", borderRadius: 2, background: s.color,
+                    width: s.wr, transition: "width .6s ease",
+                  }} />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* 検証期間バッジ + 合計 */}
+          <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
+            <div style={{ padding: "3px 9px", borderRadius: 6, background: "#ffd70012", border: "1px solid #ffd70030", fontSize: 9, color: "#ffd700", fontWeight: 700 }}>
+              📅 検証期間：2024年6月〜2025年6月（1年間）
+            </div>
+            <div style={{ padding: "3px 9px", borderRadius: 6, background: "#00e5a012", border: "1px solid #00e5a030", fontSize: 9, color: "#00e5a0", fontWeight: 700 }}>
+              💴 合計 +193.9万円
+            </div>
+            <div style={{ padding: "3px 9px", borderRadius: 6, background: "#ff6b3512", border: "1px solid #ff6b3530", fontSize: 9, color: "#ff6b35", fontWeight: 700 }}>
+              📊 総トレード数 66回
+            </div>
+          </div>
+
+          {/* 注意書き */}
+          <div style={{
+            padding: "7px 10px", borderRadius: 7,
+            background: "#ff4d6d08", border: "1px solid #ff4d6d20",
+            fontSize: 9.5, color: "#7a90a8", lineHeight: 1.6,
+          }}>
+            ⚠ 過去のバックテスト結果であり、将来の利益を保証するものではありません
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── StockCard ─────────────────────────────────────────────────
 function StockCard({ stock, color, expanded, onToggle, marketOpen }) {
   const rc = { "強気買い":"#00e5a0","買い":"#60d0a0","積極買い":"#40c4ff" }[stock.rating]||"#00e5a0";
@@ -1306,6 +1446,7 @@ function RankingTab() {
               <div style={{ fontSize:9, color:cur.color, letterSpacing:3, marginBottom:4 }}>AI MARKET COMMENT</div>
               <div style={{ fontSize:12, color:"#7090a8", lineHeight:1.7 }}>{d.market_comment}</div>
             </div>
+            <BacktestBanner/>
             {(d.stocks||[]).map(s=>(
               <StockCard key={s.rank} stock={s} color={cur.color} marketOpen={marketOpen} expanded={expandedId===`${key}-${s.rank}`} onToggle={()=>setExpandedId(expandedId===`${key}-${s.rank}`?null:`${key}-${s.rank}`)}/>
             ))}
