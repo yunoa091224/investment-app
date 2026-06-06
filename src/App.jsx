@@ -1044,7 +1044,8 @@ function BacktestBanner() {
   const accentColor = mode === "jp" ? "#a78bfa" : "#00c9ff";
 
   const strategies = [
-    { icon: "🏆", text: "ランキング上位5銘柄を選ぶ" },
+    { icon: "🇺🇸", text: "米国株：全10銘柄対象（超高リターン銘柄を逃さない）" },
+    { icon: "🇯🇵", text: "日本株：上位5銘柄に絞る（安定・低リスク）" },
     { icon: "⚡", text: "短期10日で売買する" },
     { icon: "🌍", text: "米国株・日本株を分散する" },
   ];
@@ -1109,7 +1110,7 @@ function BacktestBanner() {
                 padding: "5px 10px", borderRadius: 8,
                 background: "#06111a", border: "1px solid #0d2535",
                 fontSize: 11, color: "#b0cce0", fontWeight: 600,
-                flex: "1 1 auto", minWidth: "calc(33% - 8px)",
+                flex: "1 1 auto", minWidth: "calc(50% - 6px)",
               }}>
                 <span style={{ fontSize: 13 }}>{s.icon}</span>
                 <span>{s.text}</span>
@@ -1155,10 +1156,10 @@ function BacktestBanner() {
               📅 検証期間：2024年6月〜2025年6月（1年間）
             </div>
             <div style={{ padding: "3px 9px", borderRadius: 6, background: "#00e5a012", border: "1px solid #00e5a030", fontSize: 9, color: "#00e5a0", fontWeight: 700 }}>
-              💴 米国+146.5万 / 日本+44.6万
+              💴 合計 +110.3万円
             </div>
             <div style={{ padding: "3px 9px", borderRadius: 6, background: "#ff6b3512", border: "1px solid #ff6b3530", fontSize: 9, color: "#ff6b35", fontWeight: 700 }}>
-              📊 米国36回 / 日本14回
+              📊 総トレード数 33回
             </div>
           </div>
 
