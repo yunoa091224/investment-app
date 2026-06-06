@@ -1038,8 +1038,8 @@ function BacktestBanner() {
   const [open, setOpen] = useState(true);
   const { mode } = useMarket();
 
-  const US_DATA = { pnl: "146.5万円", winRate: "50%", trades: 36, period: "短期10日" };
-  const JP_DATA = { pnl: "47.4万円",  winRate: "60%", trades: 30, period: "短期10日" };
+  const US_DATA = { pnl: "146.5万円", winRate: "50%",   trades: 36, scope: "全10銘柄" };
+  const JP_DATA = { pnl: "44.6万円",  winRate: "64.3%", trades: 14, scope: "上位5銘柄" };
   const cur = mode === "jp" ? JP_DATA : US_DATA;
   const accentColor = mode === "jp" ? "#a78bfa" : "#00c9ff";
 
@@ -1050,8 +1050,8 @@ function BacktestBanner() {
   ];
 
   const stats = [
-    { label: "米国株短期", pnl: "+146.5万円", wr: "50%", color: "#00c9ff" },
-    { label: "日本株短期", pnl: "+47.4万円",  wr: "60%", color: "#a78bfa" },
+    { label: "米国株短期", scope: "全10銘柄対象", pnl: "+146.5万円", wr: "50%",   wrNum: 50,   color: "#00c9ff" },
+    { label: "日本株短期", scope: "上位5銘柄",    pnl: "+44.6万円",  wr: "64.3%", wrNum: 64.3, color: "#a78bfa" },
   ];
 
   return (
@@ -1124,7 +1124,10 @@ function BacktestBanner() {
                 background: "#06111a", border: `1px solid ${s.color}25`,
                 borderRadius: 10, padding: "10px 12px",
               }}>
-                <div style={{ fontSize: 9, color: s.color, fontWeight: 700, letterSpacing: 1, marginBottom: 5 }}>{s.label}</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                  <div style={{ fontSize: 9, color: s.color, fontWeight: 700, letterSpacing: 1 }}>{s.label}</div>
+                  <div style={{ fontSize: 8, color: "#445566", background: "#0d2535", padding: "1px 6px", borderRadius: 4 }}>{s.scope}</div>
+                </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
                   <div>
                     <div style={{ fontSize: 17, fontWeight: 900, color: "#00e5a0", lineHeight: 1 }}>{s.pnl}</div>
@@ -1139,7 +1142,7 @@ function BacktestBanner() {
                 <div style={{ marginTop: 7, height: 3, background: "#0d2535", borderRadius: 2, overflow: "hidden" }}>
                   <div style={{
                     height: "100%", borderRadius: 2, background: s.color,
-                    width: s.wr, transition: "width .6s ease",
+                    width: `${s.wrNum}%`, transition: "width .6s ease",
                   }} />
                 </div>
               </div>
@@ -1152,10 +1155,10 @@ function BacktestBanner() {
               📅 検証期間：2024年6月〜2025年6月（1年間）
             </div>
             <div style={{ padding: "3px 9px", borderRadius: 6, background: "#00e5a012", border: "1px solid #00e5a030", fontSize: 9, color: "#00e5a0", fontWeight: 700 }}>
-              💴 合計 +193.9万円
+              💴 米国+146.5万 / 日本+44.6万
             </div>
             <div style={{ padding: "3px 9px", borderRadius: 6, background: "#ff6b3512", border: "1px solid #ff6b3530", fontSize: 9, color: "#ff6b35", fontWeight: 700 }}>
-              📊 総トレード数 66回
+              📊 米国36回 / 日本14回
             </div>
           </div>
 
